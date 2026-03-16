@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2026-03-16
+
+### Fixed
+- **`add_project` with area parameter**: Fixed AppleScript error `-10000` when creating a project with an area. Things 3's `make` command does not support `in area "..."` for projects — now uses create-then-move pattern (same as `add_todo`)
+
+---
+
 ## [1.6.1] - 2026-01-19
 
 ### Added

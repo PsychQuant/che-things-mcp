@@ -4,7 +4,7 @@ import Foundation
 /// This is the single source of truth for version information
 public enum AppVersion {
     /// Current version - update this when releasing new versions
-    public static let current = "1.6.1"
+    public static let current = "1.6.2"
 
     /// Application name (used in MCP server registration)
     public static let name = "che-things-mcp"

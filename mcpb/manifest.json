@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "che-things-mcp",
   "display_name": "Things 3 Task Manager",
-  "version": "1.6.0",
+  "version": "1.6.2",
   "description": "Native AppleScript integration for Things 3 task management app",
   "long_description": "A Swift-based MCP server providing 47 tools for managing Things 3 tasks, projects, areas, and tags. Features include inbox, today, upcoming, anytime, someday, and logbook access, full CRUD operations for todos, projects, areas, and tags (with hierarchical support), cancel and edit operations, batch operations for efficient bulk processing, checklist item management with auth token support, move operations, UI controls, and advanced queries. Uses native AppleScript for reliable integration. Requires macOS 13.0 or later and Things 3 installed.",
   "author": {
