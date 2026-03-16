@@ -607,15 +607,20 @@ public actor ThingsManager {
             properties += ", tag names:\"\(tags.joined(separator: ", "))\""
         }
 
-        var location = ""
+        // Things 3's `make` command does NOT support `in area "..."` for projects.
+        // We must create first, then move to area (same pattern as addTodo).
+        var postCreateStatements: [String] = []
         if let areaName = areaName {
-            location = " in area \"\(escapeForAppleScript(areaName))\""
+            postCreateStatements.append("move newProject to area \"\(escapeForAppleScript(areaName))\"")
+        }
+        if let when = when {
+            postCreateStatements.append(getWhenStatement("newProject", when))
         }
 
         let script = """
         tell application "Things3"
-            set newProject to make new project with properties {\(properties)}\(location)
-            \(when != nil ? getWhenStatement("newProject", when!) : "")
+            set newProject to make new project with properties {\(properties)}
+            \(postCreateStatements.joined(separator: "\n            "))
             return id of newProject
         end tell
         """
