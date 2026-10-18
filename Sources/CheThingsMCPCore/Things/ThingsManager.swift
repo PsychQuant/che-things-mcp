@@ -75,7 +75,7 @@ public struct Tag: Codable {
 
 // MARK: - Errors
 
-public enum ThingsError: Error, LocalizedError {
+public enum ThingsError: Error, LocalizedError, Equatable {
     case scriptError(String)
     case notFound(String)
     case todoNotFound(id: String)
@@ -85,6 +85,20 @@ public enum ThingsError: Error, LocalizedError {
     case invalidParameter(String)
     case thingsNotInstalled
     case urlSchemeError(String)
+    /// macOS refused to let this server send Apple events to Things 3 (error -1743).
+    case automationNotAuthorized(binaryPath: String)
+
+    /// Maps a failed `NSAppleScript` execution to `.automationNotAuthorized`,
+    /// or returns nil when the failure is something else.
+    ///
+    /// The error number is checked first because the message is localized;
+    /// the English text is a fallback for callers that only have the message.
+    public static func authorizationError(errorNumber: Int?, message: String, binaryPath: String) -> ThingsError? {
+        if errorNumber == Int(errAEEventNotPermitted) || message.contains("Not authorized to send Apple events") {
+            return .automationNotAuthorized(binaryPath: binaryPath)
+        }
+        return nil
+    }
 
     public var errorDescription: String? {
         switch self {
@@ -106,6 +120,18 @@ public enum ThingsError: Error, LocalizedError {
             return "Things 3 is not installed. Please install it from the Mac App Store."
         case .urlSchemeError(let message):
             return "URL Scheme error: \(message)"
+        case .automationNotAuthorized(let binaryPath):
+            return """
+            Not authorized to control Things 3 (macOS Automation permission denied, error -1743). \
+            This is the Automation permission, not Accessibility. \
+            Binary: \(binaryPath). \
+            To fix: (1) open System Settings > Privacy & Security > Automation and enable "Things 3" \
+            for the app that launches this server (Claude, Terminal or your editor); \
+            (2) if there is no entry to enable, run `\(binaryPath) --setup` in Terminal.app and click Allow \
+            (this grants Terminal, which may not cover the app that launches this server); \
+            (3) retry the tool call from that app. \
+            To see the current status run `\(binaryPath) --print-tcc-path`.
+            """
         }
     }
 }
@@ -184,6 +210,13 @@ public actor ThingsManager {
 
                 if let error = error {
                     let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
+                    if let authError = ThingsError.authorizationError(
+                        errorNumber: error[NSAppleScript.errorNumber] as? Int,
+                        message: errorMessage,
+                        binaryPath: AutomationSetup.currentBinaryPath()) {
+                        continuation.resume(throwing: authError)
+                        return
+                    }
                     if errorMessage.contains("Application isn't running") || errorMessage.contains("Can't get application") {
                         continuation.resume(throwing: ThingsError.thingsNotInstalled)
                     } else {
@@ -211,6 +244,13 @@ public actor ThingsManager {
 
                 if let error = error {
                     let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
+                    if let authError = ThingsError.authorizationError(
+                        errorNumber: error[NSAppleScript.errorNumber] as? Int,
+                        message: errorMessage,
+                        binaryPath: AutomationSetup.currentBinaryPath()) {
+                        continuation.resume(throwing: authError)
+                        return
+                    }
                     continuation.resume(throwing: ThingsError.scriptError(errorMessage))
                     return
                 }

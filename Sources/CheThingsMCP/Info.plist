@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.checheng.CheThingsMCP</string>
+	<key>CFBundleName</key>
+	<string>CheThingsMCP</string>
+	<key>CFBundleVersion</key>
+	<string>1.7.0</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>CheThingsMCP needs access to Things 3 to read and manage your tasks, projects, areas and tags on behalf of your MCP client.</string>
+</dict>
+</plist>

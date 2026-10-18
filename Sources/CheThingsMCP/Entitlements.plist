@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    Do NOT empty this file. The PlistAndHelpTests tests pin the key below.
+
+    Why: the release binary is signed with the Hardened Runtime. Apple documents
+    com.apple.security.automation.apple-events as the entitlement that lets an app
+    prompt the user for permission to send Apple events to other apps (it is not
+    needed when an app only sends to itself or to processes with the same team ID).
+    Things 3 belongs to another team, so this server needs it.
+
+    Evidence level, kept honest on purpose: for Calendar, che-ical-mcp issue 154
+    observed on macOS 26.5.1 that a Hardened Runtime binary without the matching
+    entitlement gets NO permission prompt at all (a silent, permanent denial).
+    That the same happens for Apple Events is inferred from Apple's documentation,
+    not yet observed on this project. If you observe it, write it down in the
+    issue tracker.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+</dict>
+</plist>

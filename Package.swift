@@ -28,7 +28,19 @@ let package = Package(
         .executableTarget(
             name: "CheThingsMCP",
             dependencies: ["CheThingsMCPCore"],
-            path: "Sources/CheThingsMCP"
+            path: "Sources/CheThingsMCP",
+            exclude: ["Info.plist", "Entitlements.plist"],
+            linkerSettings: [
+                // Embed Info.plist into the Mach-O so the Automation dialog has a usage
+                // description (NSAppleEventsUsageDescription). The path is relative to the
+                // directory `swift build` runs in, so build from the repository root.
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "Sources/CheThingsMCP/Info.plist"
+                ])
+            ]
         ),
         // Unit tests
         .testTarget(
