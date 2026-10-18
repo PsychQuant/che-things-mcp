@@ -30,6 +30,9 @@ X64_BINARY="$PROJECT_DIR/.build/x86_64-apple-macosx/release/CheThingsMCP"
 UNIVERSAL_BINARY="$SERVER_DIR/CheThingsMCP"
 
 if [[ -f "$ARM64_BINARY" && -f "$X64_BINARY" ]]; then
+    # Remove first: writing over a binary that a running process holds open leaves a stale
+    # code-signature cache per inode, and the kernel then kills the new binary on exec.
+    rm -f "$UNIVERSAL_BINARY"
     lipo -create "$ARM64_BINARY" "$X64_BINARY" -output "$UNIVERSAL_BINARY"
     chmod +x "$UNIVERSAL_BINARY"
     echo "Created Universal Binary: $UNIVERSAL_BINARY"
@@ -38,6 +41,54 @@ else
     echo "  ARM64: $ARM64_BINARY (exists: $(test -f "$ARM64_BINARY" && echo yes || echo no))"
     echo "  X64: $X64_BINARY (exists: $(test -f "$X64_BINARY" && echo yes || echo no))"
     exit 1
+fi
+
+# Step 3.5: Sign + notarize for distribution.
+# Required for releases: on macOS 26 an ad-hoc signed binary cannot create a TCC
+# (Automation / Apple Events) grant; Developer ID signing + Hardened Runtime +
+# notarization is the path that lets end users get the permission dialog.
+#
+# Behavior:
+#   SKIP_CODESIGN=1 (or "true") -> skip unconditionally (local iteration override)
+#   REQUIRE_CODESIGN=1 -> fail-fast if signing prerequisites are missing
+#     (used by `make release-signed`: the canonical release path must not
+#      silently produce an unsigned artifact)
+#   No DEVELOPER_ID env or no cert in keychain -> auto-skip with a warning
+#     (fork-friendly default for direct script invocation)
+#   Otherwise -> run sign-and-notarize.sh
+echo ""
+SHOULD_SIGN=true
+SKIP_REASON=""
+if [[ "${SKIP_CODESIGN:-}" == "1" || "${SKIP_CODESIGN:-}" == "true" ]]; then
+    SHOULD_SIGN=false
+    SKIP_REASON="SKIP_CODESIGN=$SKIP_CODESIGN"
+elif [[ -z "${DEVELOPER_ID:-}" ]]; then
+    SHOULD_SIGN=false
+    SKIP_REASON="DEVELOPER_ID env not set"
+elif ! security find-identity -p codesigning -v 2>/dev/null | grep -qF "$DEVELOPER_ID"; then
+    SHOULD_SIGN=false
+    SKIP_REASON="codesigning identity '$DEVELOPER_ID' not in keychain"
+fi
+
+if [[ "$SHOULD_SIGN" == "false" ]]; then
+    if [[ "${REQUIRE_CODESIGN:-}" == "1" || "${REQUIRE_CODESIGN:-}" == "true" ]]; then
+        # Canonical release path: refuse to produce an unsigned artifact silently
+        echo "[3.5/4] ✗ Refusing to skip signing: REQUIRE_CODESIGN=$REQUIRE_CODESIGN" >&2
+        echo "        Reason: $SKIP_REASON" >&2
+        echo "        Fix: set DEVELOPER_ID + NOTARY_PROFILE, install a Developer ID Application" >&2
+        echo "             cert, and make sure it is in your login keychain." >&2
+        echo "        See README 'Signing & Notarization' for one-time setup." >&2
+        exit 1
+    fi
+    # Fork-friendly auto-skip: warn and continue with an unsigned binary
+    echo "[3.5/4] Skipping codesign + notarize."
+    echo "  Reason: $SKIP_REASON"
+    echo "  ⚠ The resulting binary is ad-hoc signed; suitable for local dev only."
+    echo "  ⚠ For a release-quality artifact on macOS 26: set DEVELOPER_ID + NOTARY_PROFILE,"
+    echo "    install a Developer ID Application cert, then run \`make release-signed\`."
+else
+    echo "[3.5/4] Signing + notarizing for distribution..."
+    "$SCRIPT_DIR/sign-and-notarize.sh" "$UNIVERSAL_BINARY"
 fi
 
 # Verify Universal Binary

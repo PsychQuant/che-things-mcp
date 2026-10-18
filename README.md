@@ -70,7 +70,18 @@ cp .build/release/CheThingsMCP ~/bin/
 
 > **💡 Tip:** Always install the binary to a local directory like `~/bin/`. Avoid placing it in cloud-synced folders (Dropbox, iCloud, OneDrive) as file sync operations can cause MCP connection timeouts.
 
-On first use, macOS will prompt for **Automation** permission to control Things 3 - click "Allow".
+### Permission: Automation (Apple Events)
+
+Things 3 is controlled through Apple Events, so macOS asks for the **Automation** permission (System Settings > Privacy & Security > Automation). This is *not* the Accessibility permission.
+
+If a tool call fails with `Not authorized to send Apple events to Things3`:
+
+1. Open Things 3.
+2. Run `~/bin/CheThingsMCP --setup` in **Terminal.app** (not over SSH) and click **Allow**.
+3. Open System Settings > Privacy & Security > Automation and check that the app that launches this server (Claude Desktop, Claude Code or your editor) is allowed to control Things 3. A grant given to Terminal does not automatically cover those apps. If there is no entry for the app, make one read-only tool call from it so macOS can ask.
+4. `~/bin/CheThingsMCP --print-tcc-path` prints the binary path, bundle identifier and the current status without showing any dialog. It reports the status of the context it runs in (for example Terminal), which is not necessarily the app that launches the server.
+
+Since v1.7.0 the release binary is signed with a Developer ID certificate and notarized, and it carries an embedded Info.plist with the usage description and the `com.apple.security.automation.apple-events` entitlement (see issues #1 and #4).
 
 ---
 
@@ -327,6 +338,7 @@ When creating or updating tasks:
 
 - macOS 13.0 (Ventura) or later
 - [Things 3](https://culturedcode.com/things/) installed
+- Automation permission to control Things 3 (see [Permission: Automation](#permission-automation-apple-events))
 
 ---
 
@@ -344,6 +356,7 @@ This extension:
 
 | Version | Changes |
 |---------|---------|
+| v1.7.0 | **Automation permission.** A refused Apple Events call now returns an actionable error naming Things 3, the binary path and the fix, instead of the raw AppleScript message. New `--setup` and `--print-tcc-path`. Release binary is Developer ID signed and notarized, with an embedded Info.plist and the Apple Events entitlement. `--help` now names the Automation permission (it said Accessibility). |
 | v1.6.2 | **Bug fix.** Fixed `add_project` failing with AppleScript error when `area` parameter is provided. Uses create-then-move pattern. |
 | v1.6.1 | **Version management.** Centralized `Version.swift`, CLI `--version`/`--help` support. |
 | v1.6.0 | **MCP SDK 0.11.0 upgrade.** |
@@ -360,6 +373,66 @@ This extension:
 | v0.3.0 | Added 7 new tools: batch operations (5) and checklist support (2). Improved error messages with specific IDs. Added unit tests. |
 | v0.2.0 | Added 13 new tools: areas, tags, move operations, UI controls, utility operations, advanced queries |
 | v0.1.0 | Initial release with 15 tools |
+
+---
+
+## Release Process (for maintainers)
+
+### Signing & Notarization
+
+Release binaries are signed with a Developer ID Application certificate (Hardened Runtime) and notarized with `notarytool`. On macOS 26 an ad-hoc signed binary cannot create the Automation grant, so the permission dialog may never appear.
+
+**Prerequisites** (one-time):
+
+1. Apple Developer Program enrollment and a Developer ID Application certificate in the login keychain. Check with `security find-identity -p codesigning -v`.
+2. A `notarytool` keychain profile, created interactively so the password stays out of shell history:
+   ```bash
+   xcrun notarytool store-credentials che-things-mcp --apple-id <your-apple-id> --team-id <your-team-id>
+   ```
+3. Export your identity (the scripts have no defaults, so a fork never sees the maintainer's identity):
+   ```bash
+   export DEVELOPER_ID='Developer ID Application: <Your Name> (<TeamID>)'
+   export NOTARY_PROFILE='che-things-mcp'
+   ```
+
+**Per release:**
+
+```bash
+make release-signed    # universal build -> sign -> entitlements check -> notarize -> .mcpb
+```
+
+`scripts/sign-and-notarize.sh` checks that the **signed** binary carries `com.apple.security.automation.apple-events` as `true` before it submits to Apple, so a wrong entitlements file fails in seconds instead of after the notarization wait.
+
+**Verify the result:**
+
+```bash
+codesign -dv --verbose=2 mcpb/server/CheThingsMCP        # flags=0x10000(runtime), TeamIdentifier set
+codesign -d --entitlements - mcpb/server/CheThingsMCP    # automation.apple-events = true
+spctl -a -vvv -t install mcpb/server/CheThingsMCP        # accepted; source=Notarized Developer ID
+```
+
+**Local development:**
+
+```bash
+make install           # ad-hoc signed, dev only
+make install-signed    # Developer ID + entitlements, NOT notarized, dev only (needs DEVELOPER_ID only)
+```
+
+Use `make install-signed` to try the permission flow on your own machine without waiting for notarization.
+
+| Env var | Default | Purpose |
+|---------|---------|---------|
+| `DEVELOPER_ID` | unset | Signing identity. Unset: the build script skips signing with a warning |
+| `NOTARY_PROFILE` | unset | `notarytool` keychain profile; required for `release-signed` |
+| `ENTITLEMENTS` | `Sources/CheThingsMCP/Entitlements.plist` | Override the entitlements file |
+| `SKIP_CODESIGN` | unset | `1` skips signing even when the certificate is present |
+| `REQUIRE_CODESIGN` | unset | `1` fails fast when signing prerequisites are missing (set by `release-signed`) |
+
+**Known limitation, no stapling:** `stapler staple` does not support raw Mach-O binaries, so Gatekeeper checks the notarization online on first launch.
+
+**Upgrade trap:** copying a new binary over one that a running process holds open leaves a stale code-signature cache per inode and the kernel kills the new binary on exec. `make install` and the build script remove the old file first; do the same when installing by hand (`rm -f ~/bin/CheThingsMCP`).
+
+**Troubleshooting:** `xcrun notarytool log <submission-id> --keychain-profile $NOTARY_PROFILE` shows Apple's reason for a rejection; the script prints the submission ID on every run.
 
 ---
 

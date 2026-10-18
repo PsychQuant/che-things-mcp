@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-10-18
+
+Refs #1, #4. Those issues stay open until the permission flow has been verified on a signed build.
+
+### Added
+- **`--setup`**: asks macOS for permission to control Things 3. Things 3 must be running; it refuses over SSH because the dialog cannot appear there.
+- **`--print-tcc-path`**: prints the binary path, bundle identifier, macOS version and the Automation (Apple Events) status for Things 3, without showing any dialog. The status is read in the context the command runs in, which is not necessarily the app that launches the server.
+- **Info.plist embedded in the binary** (`NSAppleEventsUsageDescription`) and **`Entitlements.plist`** (`com.apple.security.automation.apple-events`). Tests pin both files and pin `CFBundleVersion` and `mcpb/manifest.json` to `AppVersion.current`.
+
+### Changed
+- **A refused Apple Events call (`-1743`) returns an actionable error** naming Things 3, the binary path and the order of the fix, instead of the raw `AppleScript error: Not authorized to send Apple events to Things3.` The error number is checked first; the English message is only a fallback.
+- **`--help` names the Automation permission.** It used to say "Accessibility permission for AppleScript", which pointed users at the wrong pane.
+- README: new "Permission: Automation" section and a maintainer "Signing & Notarization" section.
+
+### Distribution
+- Release binary signed with Developer ID and the Hardened Runtime, then notarized (`scripts/sign-and-notarize.sh`, `make release-signed`). The script checks that the **signed** binary carries the Apple Events entitlement as `true` before submitting to Apple.
+- New `Makefile`: `install` (ad-hoc, dev only) and `install-signed` (Developer ID, not notarized, dev only).
+- The build script removes the previous universal binary before `lipo` (inode-cache trap).
+- Known limitation: stapling is skipped because raw Mach-O binaries do not support it; Gatekeeper checks online on first launch.
+
+### Notes
+- What macOS does when the Apple Events entitlement is missing is inferred from Apple's documentation. It has been observed for Calendar in another project, not yet for Apple Events here.
+
+---
+
 ## [1.6.2] - 2026-03-16
 
 ### Fixed
