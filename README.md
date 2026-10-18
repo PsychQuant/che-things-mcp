@@ -415,6 +415,8 @@ codesign -d --entitlements - mcpb/server/CheThingsMCP    # automation.apple-even
 spctl -a -vvv -t install mcpb/server/CheThingsMCP        # accepted; source=Notarized Developer ID
 ```
 
+Use `-t install`, not `-t execute`: the `execute` assessment is for app bundles and answers `rejected (the code is valid but does not seem to be an app)` for a bare command-line binary, which is not a notarization failure. `codesign --verify --strict -R="notarized" --check-notarization mcpb/server/CheThingsMCP` checks the notarization ticket directly (it fails for an ad-hoc signed binary, so it does tell the two apart), and `xcrun notarytool info <submission-id> --keychain-profile che-mcps-notary` shows Apple's record.
+
 **Local development:**
 
 ```bash
