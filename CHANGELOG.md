@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Tool calls no longer hang for minutes** (#5). Every tool ran `NSAppleScript` on a background queue, which Apple documents as main-thread only; Apple Events to Things then stalled until the 120 s reply timeout in 4 of 5 runs of the same script. Scripts now run on the main thread. Over MCP stdio: `get_tags` 0.16–0.26 s (1.7.0: no answer within 150 s in 3 of 3 runs), `get_areas` 0.17–0.22 s, `get_today` (354 items) 1.0–2.0 s.
+
+### Changed
+- `get_tags` and `get_areas` read each property for the whole collection in one Apple Event instead of one per property per item; output is unchanged (checked byte for byte against the old scripts on live data).
+- Removed the unused `executeAppleScriptReturningList`.
+
+### Tests
+- `AppleScriptRunnerTests`: an AppleScriptObjC script reports the thread it runs on; result and error mapping are pinned. No Things 3 needed.
+- `LiveThingsQueryTests`: byte-for-byte comparison of the tags and areas scripts with the old per-item scripts; runs only with `CHE_THINGS_LIVE=1` and Things 3 running.
+
+---
+
 ## [1.7.0] - 2026-10-18
 
 Refs #1, #4. Those issues stay open until the permission flow has been verified on a signed build.
