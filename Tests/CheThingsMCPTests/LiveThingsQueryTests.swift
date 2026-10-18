@@ -48,8 +48,15 @@ final class LiveThingsQueryTests: XCTestCase {
     func testTagsScriptMatchesThePerItemReference() async throws {
         let reference = try await AppleScriptRunner.run(Self.perItemTags)
         let production = try await AppleScriptRunner.run(ThingsManager.tagsScript)
-        XCTAssertFalse(reference.isEmpty, "no tags to compare — add a tag (one with a parent) to make this check meaningful")
         XCTAssertEqual(production, reference)
+        // The bulk `name of parent tag of tags` read is the risky part; without a tag that has a
+        // parent, the check above passes without exercising it.
+        let parentFields = reference.components(separatedBy: "###").compactMap { row -> String? in
+            let fields = row.components(separatedBy: "|||")
+            return fields.count == 3 ? fields[2] : nil
+        }
+        XCTAssertTrue(parentFields.contains { !$0.isEmpty },
+                      "no tag with a parent in Things 3 — add one (a tag nested under another) so the parent column is exercised")
     }
 
     func testAreasScriptMatchesThePerItemReference() async throws {

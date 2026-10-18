@@ -202,14 +202,24 @@ public actor ThingsManager {
     }()
 
     /// AppleScript that lists every area as `id|||name|||tag names###`.
-    /// Reads each property for all areas in one Apple Event instead of three per area; issue 5.
+    /// Reads each property for all areas in one Apple Event instead of three per area, with the same
+    /// length check and per-area fallback as `tagsScript`; issue 5.
     static let areasScript = """
     tell application "Things3"
-        set areaCount to count of areas
-        if areaCount = 0 then return ""
         set allIds to id of areas
+        set areaCount to count of allIds
+        if areaCount = 0 then return ""
         set allNames to name of areas
         set allTags to tag names of areas
+        if (count of allNames) is not areaCount or (count of allTags) is not areaCount then
+            set allNames to {}
+            set allTags to {}
+            repeat with areaId in allIds
+                set a to area id (contents of areaId)
+                set end of allNames to name of a
+                set end of allTags to tag names of a
+            end repeat
+        end if
         set output to ""
         repeat with i from 1 to areaCount
             set output to output & (item i of allIds) & "|||" & (item i of allNames) & "|||" & (item i of allTags) & "###"
@@ -219,27 +229,33 @@ public actor ThingsManager {
     """
 
     /// AppleScript that lists every tag as `id|||name|||parent tag name###`.
-    /// Reads each property for all tags in one Apple Event; the per-tag `parent tag` read is only a
-    /// fallback for a Things version that refuses the bulk form. Output matches the old per-item
-    /// loop byte for byte (`LiveThingsQueryTests`); issue 5.
+    /// Reads each property for all tags in one Apple Event. If a bulk read fails or comes back with
+    /// a different length than the id list (a Things version that refuses the bulk form, or tags
+    /// changed between events), it reads tag by tag instead. Output matches the old per-item loop
+    /// byte for byte on both paths (`LiveThingsQueryTests`, forced-fallback check); issue 5.
     static let tagsScript = """
     tell application "Things3"
-        set tagCount to count of tags
-        if tagCount = 0 then return ""
         set allIds to id of tags
+        set tagCount to count of allIds
+        if tagCount = 0 then return ""
         set allNames to name of tags
         set allParents to {}
         try
             set allParents to name of parent tag of tags
-        on error
-            repeat with t in tags
+        end try
+        if (count of allNames) is not tagCount or (count of allParents) is not tagCount then
+            set allNames to {}
+            set allParents to {}
+            repeat with tagId in allIds
+                set t to tag id (contents of tagId)
+                set end of allNames to name of t
                 set parentName to ""
                 try
                     set parentName to name of parent tag of t
                 end try
                 set end of allParents to parentName
             end repeat
-        end try
+        end if
         set output to ""
         repeat with i from 1 to tagCount
             set parentName to ""
