@@ -203,80 +203,8 @@ public actor ThingsManager {
 
     // MARK: - AppleScript Execution
 
-    // IMPORTANT: AppleScript execution MUST run on a background thread to avoid blocking
-    // the MCP SDK's async event loop. NSAppleScript.executeAndReturnError is synchronous
-    // and will block stdin processing if run on the main thread.
-
     private func executeAppleScript(_ script: String) async throws -> String {
-        // Run AppleScript on a background DispatchQueue to prevent blocking MCP event loop
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                var error: NSDictionary?
-                guard let appleScript = NSAppleScript(source: script) else {
-                    continuation.resume(throwing: ThingsError.scriptError("Failed to create AppleScript"))
-                    return
-                }
-
-                let result = appleScript.executeAndReturnError(&error)
-
-                if let error = error {
-                    let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
-                    if let authError = ThingsError.authorizationError(
-                        errorNumber: error[NSAppleScript.errorNumber] as? Int,
-                        message: errorMessage,
-                        binaryPath: AutomationSetup.currentBinaryPath()) {
-                        continuation.resume(throwing: authError)
-                        return
-                    }
-                    if errorMessage.contains("Application isn't running") || errorMessage.contains("Can't get application") {
-                        continuation.resume(throwing: ThingsError.thingsNotInstalled)
-                    } else {
-                        continuation.resume(throwing: ThingsError.scriptError(errorMessage))
-                    }
-                    return
-                }
-
-                continuation.resume(returning: result.stringValue ?? "")
-            }
-        }
-    }
-
-    private func executeAppleScriptReturningList(_ script: String) async throws -> [String] {
-        // Run AppleScript on a background DispatchQueue to prevent blocking MCP event loop
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                var error: NSDictionary?
-                guard let appleScript = NSAppleScript(source: script) else {
-                    continuation.resume(throwing: ThingsError.scriptError("Failed to create AppleScript"))
-                    return
-                }
-
-                let result = appleScript.executeAndReturnError(&error)
-
-                if let error = error {
-                    let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
-                    if let authError = ThingsError.authorizationError(
-                        errorNumber: error[NSAppleScript.errorNumber] as? Int,
-                        message: errorMessage,
-                        binaryPath: AutomationSetup.currentBinaryPath()) {
-                        continuation.resume(throwing: authError)
-                        return
-                    }
-                    continuation.resume(throwing: ThingsError.scriptError(errorMessage))
-                    return
-                }
-
-                // Parse list result
-                var items: [String] = []
-                let count = result.numberOfItems
-                for i in 1...count {
-                    if let item = result.atIndex(i)?.stringValue {
-                        items.append(item)
-                    }
-                }
-                continuation.resume(returning: items)
-            }
-        }
+        try await AppleScriptRunner.run(script)
     }
 
     // MARK: - List Access (Read Operations)
