@@ -54,20 +54,45 @@ final class ThingsAuthorizationErrorTests: XCTestCase {
         XCTAssertTrue(message.contains("-1743"))
     }
 
+    func testSystemSettingsComesBeforeSetup() throws {
+        let settings = try XCTUnwrap(message.range(of: "System Settings"))
+        let setup = try XCTUnwrap(message.range(of: "--setup"))
+        XCTAssertLessThan(settings.lowerBound, setup.lowerBound,
+                          "the cheap fix (turn the switch on) must come before running --setup")
+    }
+
     func testMessagePointsToSystemSettings() {
         XCTAssertTrue(message.contains("System Settings"))
         XCTAssertTrue(message.contains("Privacy & Security"))
     }
 
-    func testMessageMentionsSetupWithTheBinaryPath() {
-        XCTAssertTrue(message.contains("\(binary) --setup"))
+    func testMessageMentionsSetupWithTheQuotedBinaryPath() {
+        XCTAssertTrue(message.contains("'\(binary)' --setup"))
+        XCTAssertTrue(message.contains("'\(binary)' --print-tcc-path"))
     }
 
-    func testMessageWarnsThatSetupInTerminalMayNotCoverTheHostApp() {
-        // Authorization granted from Terminal is attributed to Terminal, and
-        // does not necessarily cover Claude / the editor that launches this server.
-        XCTAssertTrue(message.contains("Terminal"))
-        XCTAssertTrue(message.lowercased().contains("retry"))
+    /// The .mcpb install path contains spaces ("Application Support", "Claude Extensions");
+    /// a command copied from the message must still work.
+    func testCommandsStayCopyableWhenThePathHasSpaces() {
+        let spaced = "/Users/someone/Library/Application Support/Claude/Claude Extensions/local.mcpb.x/server/CheThingsMCP"
+        let text = ThingsError.automationNotAuthorized(binaryPath: spaced).errorDescription ?? ""
+        XCTAssertTrue(text.contains("'\(spaced)' --setup"))
+    }
+
+    func testAnApostropheInThePathIsEscaped() {
+        XCTAssertEqual(ThingsError.shellQuoted("/tmp/it's/CheThingsMCP"), "'/tmp/it'\\''s/CheThingsMCP'")
+        XCTAssertEqual(ThingsError.shellQuoted("/plain/path"), "'/plain/path'")
+    }
+
+    func testMessageSaysSetupGrantsTheTerminalAppNotTheHost() {
+        // Authorization granted from a terminal is attributed to that terminal app, and does
+        // not necessarily cover Claude / the editor that launches this server.
+        XCTAssertTrue(message.contains("terminal app"))
+        XCTAssertTrue(message.contains("its own entry"))
+    }
+
+    func testMessageDoesNotAssumeTerminalAppIsTheOnlyTerminal() {
+        XCTAssertTrue(message.contains("iTerm2"))
     }
 
     func testMessageDoesNotSendTheUserToTheAccessibilityPane() {
@@ -77,8 +102,8 @@ final class ThingsAuthorizationErrorTests: XCTestCase {
         XCTAssertFalse(message.contains("enable Accessibility"))
     }
 
-    func testTheErrorIsStillALocalizedError() {
+    func testLocalizedDescriptionCarriesTheMessage() {
         let error: Error = ThingsError.automationNotAuthorized(binaryPath: binary)
-        XCTAssertTrue(error is LocalizedError)
+        XCTAssertEqual(error.localizedDescription, message)
     }
 }

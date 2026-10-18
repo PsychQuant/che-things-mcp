@@ -46,7 +46,9 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 # Create ~/bin if it doesn't exist
 mkdir -p ~/bin
 
-# Download the latest release
+# Download the latest release. Remove the old file first: overwriting a binary that a running
+# process holds open can leave a stale code-signature cache, and macOS then kills the new one.
+rm -f ~/bin/CheThingsMCP
 curl -L https://github.com/kiki830621/che-things-mcp/releases/latest/download/CheThingsMCP -o ~/bin/CheThingsMCP
 chmod +x ~/bin/CheThingsMCP
 
@@ -64,7 +66,8 @@ git clone https://github.com/kiki830621/che-things-mcp.git
 cd che-things-mcp
 swift build -c release
 
-# Copy binary to ~/bin
+# Copy binary to ~/bin (remove the old file first, see above)
+rm -f ~/bin/CheThingsMCP
 cp .build/release/CheThingsMCP ~/bin/
 ```
 
@@ -76,10 +79,11 @@ Things 3 is controlled through Apple Events, so macOS asks for the **Automation*
 
 If a tool call fails with `Not authorized to send Apple events to Things3`:
 
-1. Open Things 3.
-2. Run `~/bin/CheThingsMCP --setup` in **Terminal.app** (not over SSH) and click **Allow**.
-3. Open System Settings > Privacy & Security > Automation and check that the app that launches this server (Claude Desktop, Claude Code or your editor) is allowed to control Things 3. A grant given to Terminal does not automatically cover those apps. If there is no entry for the app, make one read-only tool call from it so macOS can ask.
-4. `~/bin/CheThingsMCP --print-tcc-path` prints the binary path, bundle identifier and the current status without showing any dialog. It reports the status of the context it runs in (for example Terminal), which is not necessarily the app that launches the server.
+1. Open System Settings > Privacy & Security > Automation, find the app that launches this server (Claude Desktop, Claude Code, your terminal app or your editor) and turn on **Things 3** under it. Then retry the tool call.
+2. If that app has no entry, or you cannot turn it on: open Things 3 and run `~/bin/CheThingsMCP --setup` in the terminal app you actually use (Terminal.app, iTerm2, or the terminal inside your editor; not over SSH) and click **Allow**. That grants the terminal app. If the server is started by another app (Claude Desktop, for example), that app still needs its own entry from step 1.
+3. `~/bin/CheThingsMCP --print-tcc-path` prints the binary path, bundle identifier and the current status without showing any dialog. It reports the status of the context it runs in (for example your terminal), which is not necessarily the app that launches the server.
+
+Once macOS has recorded a "denied" decision it normally does not show the dialog again; turning the switch on in System Settings (step 1) is the way back.
 
 Since v1.7.0 the release binary is signed with a Developer ID certificate and notarized, and it carries an embedded Info.plist with the usage description and the `com.apple.security.automation.apple-events` entitlement (see issues #1 and #4).
 
@@ -380,7 +384,7 @@ This extension:
 
 ### Signing & Notarization
 
-Release binaries are signed with a Developer ID Application certificate (Hardened Runtime) and notarized with `notarytool`. On macOS 26 an ad-hoc signed binary cannot create the Automation grant, so the permission dialog may never appear.
+Release binaries are signed with a Developer ID Application certificate (Hardened Runtime) and notarized with `notarytool`. On macOS 26 ad-hoc signed binaries were reported (che-ical-mcp issues 44 and 154) to be unable to create TCC grants for Calendar and Reminders. For Automation, which this project uses, that is inferred from Apple's documentation and has not been observed here yet.
 
 **Prerequisites** (one-time):
 
@@ -398,10 +402,10 @@ Release binaries are signed with a Developer ID Application certificate (Hardene
 **Per release:**
 
 ```bash
-make release-signed    # universal build -> sign -> entitlements check -> notarize -> .mcpb
+make release-signed    # tests -> universal build -> content check -> sign -> entitlements check -> notarize -> .mcpb
 ```
 
-`scripts/sign-and-notarize.sh` checks that the **signed** binary carries `com.apple.security.automation.apple-events` as `true` before it submits to Apple, so a wrong entitlements file fails in seconds instead of after the notarization wait.
+Before anything is signed, `scripts/build-mcpb.sh` checks every architecture slice of the build: it must contain the current version, the `--print-tcc-path` code and the embedded Info.plist, so an old build left in `.build` cannot be shipped under a new version number. `scripts/sign-and-notarize.sh` then checks that the **signed** binary carries `com.apple.security.automation.apple-events` as `true` before it submits to Apple, and that the submission ended with `status: Accepted`.
 
 **Verify the result:**
 
@@ -428,7 +432,7 @@ Use `make install-signed` to try the permission flow on your own machine without
 | `SKIP_CODESIGN` | unset | `1` skips signing even when the certificate is present |
 | `REQUIRE_CODESIGN` | unset | `1` fails fast when signing prerequisites are missing (set by `release-signed`) |
 
-**Known limitation, no stapling:** `stapler staple` does not support raw Mach-O binaries, so Gatekeeper checks the notarization online on first launch.
+**Known limitation, no stapling:** `stapler staple` does not support raw Mach-O binaries. A file that carries a quarantine attribute (for example a browser download) is checked online by Gatekeeper on first launch; a binary fetched with `curl` does not carry that attribute.
 
 **Upgrade trap:** copying a new binary over one that a running process holds open leaves a stale code-signature cache per inode and the kernel kills the new binary on exec. `make install` and the build script remove the old file first; do the same when installing by hand (`rm -f ~/bin/CheThingsMCP`).
 

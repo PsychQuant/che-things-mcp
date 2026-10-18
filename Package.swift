@@ -31,9 +31,11 @@ let package = Package(
             path: "Sources/CheThingsMCP",
             exclude: ["Info.plist", "Entitlements.plist"],
             linkerSettings: [
-                // Embed Info.plist into the Mach-O so the Automation dialog has a usage
-                // description (NSAppleEventsUsageDescription). The path is relative to the
-                // directory `swift build` runs in, so build from the repository root.
+                // Embed Info.plist into the Mach-O so the binary carries the usage description
+                // (NSAppleEventsUsageDescription) that Apple requires of an app that sends Apple
+                // events. Whether the dialog shows that text for a command-line tool has not been
+                // observed here. The path is relative to the directory `swift build` runs in, so
+                // build from the repository root.
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",
                     "-Xlinker", "__TEXT",

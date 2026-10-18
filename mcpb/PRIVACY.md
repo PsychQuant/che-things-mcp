@@ -34,7 +34,7 @@ On first use, macOS will request permission for this extension to control Things
 
 | Permission | Purpose |
 |------------|---------|
-| **Accessibility/Automation** | Required to execute AppleScript commands in Things 3 |
+| **Automation** | Required to send Apple events to Things 3 (it is not the Accessibility permission) |
 
 You can manage these permissions in **System Settings → Privacy & Security → Automation**.
 

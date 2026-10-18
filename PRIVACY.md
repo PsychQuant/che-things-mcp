@@ -50,7 +50,7 @@ On first use, macOS will automatically prompt for this permission.
 
 ## How to Grant Permissions
 
-1. The first time you use a tool, macOS will prompt for **Automation** permission
+1. The first time you use a tool, macOS may prompt for **Automation** permission. If it does not, or a tool fails with "Not authorized to send Apple events", open Things 3 and run `CheThingsMCP --setup` in your terminal app
 2. Click "Allow" to enable AppleScript control of Things 3
 3. Alternatively, grant permissions manually:
    - Open **System Settings**

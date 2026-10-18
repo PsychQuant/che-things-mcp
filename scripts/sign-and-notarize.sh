@@ -1,14 +1,15 @@
 #!/bin/bash
 # Sign and notarize the CheThingsMCP universal binary for outside-App-Store distribution.
 #
-# macOS 26 tightened TCC: ad-hoc signed binaries can no longer trigger
-# Automation (Apple Events) permission grants. Distribution-quality binaries must
-# be signed with a Developer ID Application cert + hardened runtime + notarized.
+# Why Developer ID + Hardened Runtime + notarization: on macOS 26 ad-hoc signed
+# binaries were reported (che-ical-mcp issues 44 and 154) to be unable to create
+# TCC grants for Calendar / Reminders. For Automation (Apple Events), which this
+# project uses, that is inferred from Apple's documentation and not yet observed.
 #
 # Stapling is NOT performed: stapler staple does not support raw Mach-O
-# binaries (only .app/.pkg/.dmg). Gatekeeper online-checks at first launch
-# instead — this requires the user's machine to be online once when first
-# running the binary.
+# binaries (only .app/.pkg/.dmg). A file that carries a quarantine attribute
+# (for example one downloaded in a browser) is checked online by Gatekeeper at
+# first launch; a binary fetched with curl does not carry that attribute.
 #
 # Usage:
 #   scripts/sign-and-notarize.sh <path/to/binary>
@@ -56,7 +57,10 @@ if [[ ! -f "$ENTITLEMENTS" ]]; then
 fi
 
 # Pre-flight: verify cert exists in keychain (avoids cryptic codesign error mid-flow)
-if ! security find-identity -p codesigning -v 2>/dev/null | grep -qF "$DEVELOPER_ID"; then
+# Capture first: with pipefail, `security ... | grep -q` can fail with SIGPIPE when grep
+# exits early, which would look like a missing certificate. -i because a SHA-1 may be lower case.
+IDENTITIES="$(security find-identity -p codesigning -v 2>/dev/null || true)"
+if ! grep -qiF -- "$DEVELOPER_ID" <<< "$IDENTITIES"; then
     echo "Error: codesigning identity not found in keychain: $DEVELOPER_ID" >&2
     echo "       Available identities:" >&2
     security find-identity -p codesigning -v 2>&1 | grep -E '"[^"]*"' | sed 's/^/         /' >&2
@@ -71,12 +75,11 @@ if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>
     exit 1
 fi
 
-# Use mktemp for /tmp zip + trap to ensure cleanup on any exit (including SIGINT/SIGTERM/error)
-ZIP_PATH=""
-cleanup() {
-    [[ -n "$ZIP_PATH" && -f "$ZIP_PATH" ]] && rm -f "$ZIP_PATH"
-}
-trap cleanup EXIT INT TERM
+# One private work directory for every temp file, removed on any exit (including
+# SIGINT/SIGTERM/error). BSD `mktemp -t name-XXXXXXXX` keeps the literal X's and
+# appends a random suffix, so appending ".zip" to it would leak an empty file per run.
+WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/sign-and-notarize.XXXXXXXX")"
+trap 'rm -rf "$WORKDIR"' EXIT INT TERM
 
 echo "=== sign-and-notarize: $BINARY ==="
 echo "  Identity:      $DEVELOPER_ID"
@@ -111,7 +114,7 @@ codesign --verify --deep --strict --verbose=2 "$BINARY" 2>&1 | head -5
 # before notarization so a miss fails in seconds, not after a 1-15 minute wait.
 echo ""
 echo "[2.5/4] Verifying the Apple Events entitlement on the signed binary..."
-ENT_PLIST="$(mktemp -t entitlements-XXXXXXXX).plist"
+ENT_PLIST="$WORKDIR/entitlements.plist"
 if ! codesign -d --entitlements "$ENT_PLIST" --xml "$BINARY"; then
     echo "Error: could not read entitlements from signed binary ('$BINARY')." >&2
     echo "       codesign -d --entitlements failed (see codesign output above)." >&2
@@ -148,12 +151,11 @@ echo "  ✓ automation.apple-events entitlement present and true"
 # if the wait fails. notarytool prints "  id: <UUID>" line on success and failure.
 echo ""
 echo "[3/4] Submitting for notarization (this typically takes 1-15 minutes)..."
-ZIP_PATH="$(mktemp -t notarize-XXXXXXXX).zip"
+ZIP_PATH="$WORKDIR/notarize.zip"
 ditto -c -k --keepParent "$BINARY" "$ZIP_PATH"
 
 # tee output so user sees progress while we capture submission ID
-SUBMIT_LOG="$(mktemp -t notarize-log-XXXXXXXX)"
-trap 'cleanup; rm -f "$SUBMIT_LOG"' EXIT INT TERM
+SUBMIT_LOG="$WORKDIR/notarize.log"
 
 # Helper: extract submission UUID from notarytool log; never aborts under set -e
 # (grep returns 1 if no match → would abort; trailing || true makes it fail-soft)
@@ -177,6 +179,18 @@ if ! xcrun notarytool submit "$ZIP_PATH" \
     exit 1
 fi
 
+# Do not rely on the exit code alone: man notarytool does not say what it returns for an
+# Invalid or Rejected submission, and an unnotarized binary must not be packaged.
+if ! grep -qE '^[[:space:]]*status:[[:space:]]*Accepted' "$SUBMIT_LOG"; then
+    SUBMISSION_ID="$(extract_submission_id "$SUBMIT_LOG")"
+    echo "" >&2
+    echo "Error: notarization did not finish with 'status: Accepted'." >&2
+    if [[ -n "$SUBMISSION_ID" ]]; then
+        echo "       To see Apple's reason: xcrun notarytool log $SUBMISSION_ID --keychain-profile $NOTARY_PROFILE" >&2
+    fi
+    exit 1
+fi
+
 SUBMISSION_ID="$(extract_submission_id "$SUBMIT_LOG")"
 if [[ -n "$SUBMISSION_ID" ]]; then
     echo "Submission ID: $SUBMISSION_ID"
@@ -194,5 +208,5 @@ codesign -dv --verbose=2 "$BINARY" 2>&1 | grep -E "Authority|TeamIdentifier|flag
 echo ""
 echo "=== sign-and-notarize: DONE ==="
 echo "Note: stapling skipped (raw Mach-O binaries don't support stapler)."
-echo "      Gatekeeper will online-check on first launch."
+echo "      A quarantined copy (for example a browser download) is checked online on first launch."
 echo "      To verify notarization end-to-end: spctl -a -vvv -t install $BINARY"

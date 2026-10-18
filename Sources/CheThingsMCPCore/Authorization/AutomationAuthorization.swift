@@ -65,8 +65,11 @@ public enum AutomationProbe {
     public static func status(bundleID: String = thingsBundleID, askUserIfNeeded: Bool) -> AutomationStatus {
         let target = NSAppleEventDescriptor(bundleIdentifier: bundleID)
         guard let descriptor = target.aeDesc else { return .other(-1) }
-        let osStatus = AEDeterminePermissionToAutomateTarget(
-            descriptor, AEEventClass(typeWildCard), AEEventID(typeWildCard), askUserIfNeeded)
+        // `aeDesc` is an inner pointer: keep `target` alive until the call has returned.
+        let osStatus = withExtendedLifetime(target) {
+            AEDeterminePermissionToAutomateTarget(
+                descriptor, AEEventClass(typeWildCard), AEEventID(typeWildCard), askUserIfNeeded)
+        }
         return AutomationStatus.classify(Int(osStatus))
     }
 }
@@ -128,6 +131,24 @@ public enum AutomationSetup {
         return 0
     }
 
+    /// What `--setup` should do for a given situation. Pure, so it can be tested; the dialog
+    /// itself cannot be.
+    public enum SetupStep: Equatable, Sendable {
+        case notRunning
+        case alreadyAuthorized
+        case deniedBefore
+        case askUser
+    }
+
+    public static func plan(isRunning: Bool, status: AutomationStatus) -> SetupStep {
+        guard isRunning else { return .notRunning }
+        switch status {
+        case .authorized: return .alreadyAuthorized
+        case .denied: return .deniedBefore
+        case .notDetermined, .targetNotRunning, .other: return .askUser
+        }
+    }
+
     /// `--setup`: asks macOS for permission to control Things 3.
     /// Returns the process exit code (0 = authorized).
     public static func runSetup() -> Int32 {
@@ -141,19 +162,32 @@ public enum AutomationSetup {
             return 2
         }
 
-        guard AutomationProbe.isRunning() else {
+        let running = AutomationProbe.isRunning()
+        let before = running ? AutomationProbe.status(askUserIfNeeded: false) : .targetNotRunning
+
+        switch plan(isRunning: running, status: before) {
+        case .notRunning:
             fputs("""
             Things 3 is not running. Open Things 3, then run --setup again.
             (macOS can only ask about an app that is running.)
 
             """, stderr)
             return 1
-        }
-
-        if AutomationProbe.status(askUserIfNeeded: false) == .authorized {
+        case .alreadyAuthorized:
             print("Already authorized: this context may send Apple events to Things 3.")
             printContextNote()
             return 0
+        case .deniedBefore:
+            // macOS normally does not show the dialog again after an explicit denial, so
+            // asking would only print a second "denied". Say where the switch is instead.
+            print("""
+            macOS already holds a "denied" decision for this context, and normally does not ask again.
+            Open System Settings > Privacy & Security > Automation, find the app that is running this
+            command (your terminal app) and turn on Things 3 under it. Then run --print-tcc-path to check.
+            """)
+            return 1
+        case .askUser:
+            break
         }
 
         print("Asking macOS for permission to control Things 3. Click Allow in the dialog.")

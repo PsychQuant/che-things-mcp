@@ -88,6 +88,12 @@ public enum ThingsError: Error, LocalizedError, Equatable {
     /// macOS refused to let this server send Apple events to Things 3 (error -1743).
     case automationNotAuthorized(binaryPath: String)
 
+    /// Single-quotes a path for a shell command, escaping embedded single quotes. The `.mcpb`
+    /// install path contains spaces, so a command copied from an error message must be quoted.
+    static func shellQuoted(_ path: String) -> String {
+        "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
     /// Maps a failed `NSAppleScript` execution to `.automationNotAuthorized`,
     /// or returns nil when the failure is something else.
     ///
@@ -121,16 +127,21 @@ public enum ThingsError: Error, LocalizedError, Equatable {
         case .urlSchemeError(let message):
             return "URL Scheme error: \(message)"
         case .automationNotAuthorized(let binaryPath):
+            let quoted = ThingsError.shellQuoted(binaryPath)
             return """
-            Not authorized to control Things 3 (macOS Automation permission denied, error -1743). \
+            Not authorized to control Things 3 (macOS Automation permission, error -1743). \
             This is the Automation permission, not Accessibility. \
             Binary: \(binaryPath). \
-            To fix: (1) open System Settings > Privacy & Security > Automation and enable "Things 3" \
-            for the app that launches this server (Claude, Terminal or your editor); \
-            (2) if there is no entry to enable, run `\(binaryPath) --setup` in Terminal.app and click Allow \
-            (this grants Terminal, which may not cover the app that launches this server); \
-            (3) retry the tool call from that app. \
-            To see the current status run `\(binaryPath) --print-tcc-path`.
+            What to do: \
+            (1) open System Settings > Privacy & Security > Automation, find the app that launches \
+            this server (Claude, your terminal app or your editor) and turn on "Things 3" under it, \
+            then retry the tool call; \
+            (2) if that app has no entry or you cannot turn it on, open Things 3 and run \
+            \(quoted) --setup in the terminal app you actually use (Terminal.app, iTerm2 or the \
+            terminal inside your editor) and click Allow. That grants the terminal app. If the server \
+            is started by another app (Claude Desktop, for example), that app still needs its own \
+            entry from step 1; \
+            (3) \(quoted) --print-tcc-path shows the current status without any dialog.
             """
         }
     }

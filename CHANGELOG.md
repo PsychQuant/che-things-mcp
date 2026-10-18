@@ -17,13 +17,18 @@ Refs #1, #4. Those issues stay open until the permission flow has been verified 
 ### Changed
 - **A refused Apple Events call (`-1743`) returns an actionable error** naming Things 3, the binary path and the order of the fix, instead of the raw `AppleScript error: Not authorized to send Apple events to Things3.` The error number is checked first; the English message is only a fallback.
 - **`--help` names the Automation permission.** It used to say "Accessibility permission for AppleScript", which pointed users at the wrong pane.
-- README: new "Permission: Automation" section and a maintainer "Signing & Notarization" section.
+- README: new "Permission: Automation" section and a maintainer "Signing & Notarization" section. The install commands now remove the old binary before copying, to avoid the code-signature cache trap.
+- `mcpb/PRIVACY.md` named the Accessibility permission; it now says Automation.
 
 ### Distribution
 - Release binary signed with Developer ID and the Hardened Runtime, then notarized (`scripts/sign-and-notarize.sh`, `make release-signed`). The script checks that the **signed** binary carries the Apple Events entitlement as `true` before submitting to Apple.
 - New `Makefile`: `install` (ad-hoc, dev only) and `install-signed` (Developer ID, not notarized, dev only).
 - The build script removes the previous universal binary before `lipo` (inode-cache trap).
-- Known limitation: stapling is skipped because raw Mach-O binaries do not support it; Gatekeeper checks online on first launch.
+- `make release-signed` checks its environment first, then runs the tests, so a missing variable fails at once.
+- The build script now builds both architectures in one invocation and locates the product with `--show-bin-path`. The old per-architecture paths (`.build/<arch>-apple-macosx/release`) only held leftovers from earlier toolchains, and under the `swiftbuild` build system both `--arch` values write to the same directory, so building them one after the other would have shipped an old binary under this version number. Every slice is also checked for the current version, the `--print-tcc-path` code and the embedded Info.plist before it is signed.
+- `mcpb pack` now gets an explicit output path. Without it the bundle was written to `mcpb/mcpb.mcpb` (hidden by `.gitignore`) while the script reported, and the repository tracked, `mcpb/che-things-mcp.mcpb`, which would have stayed at the previous release. The script also checks that the binary inside the bundle is the one it just verified.
+- The signing script ends the run only when notarytool reports `status: Accepted`, and keeps its temporary files in one private directory.
+- Known limitation: stapling is skipped because raw Mach-O binaries do not support it. A file with a quarantine attribute (for example a browser download) is checked online by Gatekeeper on first launch; a binary fetched with `curl` is not.
 
 ### Notes
 - What macOS does when the Apple Events entitlement is missing is inferred from Apple's documentation. It has been observed for Calendar in another project, not yet for Apple Events here.

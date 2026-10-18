@@ -13,40 +13,74 @@ echo "=== che-things-mcp MCPB Build Script ==="
 echo "Project directory: $PROJECT_DIR"
 echo ""
 
-# Step 1: Build for both architectures
-echo "[1/4] Building for Apple Silicon (arm64)..."
+# Step 1: Build a universal binary (arm64 + x86_64) in ONE invocation.
+# Why not one build per architecture: with the swiftbuild build system (the default since
+# Swift 6.4) every --arch value writes into the same directory, so a second build overwrites
+# the first, and the old per-architecture directories (.build/<arch>-apple-macosx/release)
+# only hold leftovers from earlier toolchains. Shipping one of those leftovers would put old
+# code under a new version number, so the product is located with --show-bin-path instead.
+echo "[1/4] Building universal binary (arm64 + x86_64)..."
 cd "$PROJECT_DIR"
-swift build -c release --arch arm64
+swift build -c release --arch arm64 --arch x86_64
+BIN_DIR="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path | tail -1)"
+BUILT_BINARY="$BIN_DIR/CheThingsMCP"
 
-echo "[2/4] Building for Intel (x86_64)..."
-swift build -c release --arch x86_64
-
-# Step 2: Create Universal Binary
-echo "[3/4] Creating Universal Binary..."
-mkdir -p "$SERVER_DIR"
-
-ARM64_BINARY="$PROJECT_DIR/.build/arm64-apple-macosx/release/CheThingsMCP"
-X64_BINARY="$PROJECT_DIR/.build/x86_64-apple-macosx/release/CheThingsMCP"
-UNIVERSAL_BINARY="$SERVER_DIR/CheThingsMCP"
-
-if [[ -f "$ARM64_BINARY" && -f "$X64_BINARY" ]]; then
-    # Remove first: writing over a binary that a running process holds open leaves a stale
-    # code-signature cache per inode, and the kernel then kills the new binary on exec.
-    rm -f "$UNIVERSAL_BINARY"
-    lipo -create "$ARM64_BINARY" "$X64_BINARY" -output "$UNIVERSAL_BINARY"
-    chmod +x "$UNIVERSAL_BINARY"
-    echo "Created Universal Binary: $UNIVERSAL_BINARY"
-else
-    echo "Error: Could not find architecture-specific binaries"
-    echo "  ARM64: $ARM64_BINARY (exists: $(test -f "$ARM64_BINARY" && echo yes || echo no))"
-    echo "  X64: $X64_BINARY (exists: $(test -f "$X64_BINARY" && echo yes || echo no))"
+# Step 2: Check the product is what we think it is, BEFORE it is copied, signed or notarized.
+echo "[2/4] Verifying the built binary..."
+if [[ ! -f "$BUILT_BINARY" ]]; then
+    echo "Error: built binary not found at $BUILT_BINARY"
     exit 1
 fi
+EXPECTED_VERSION="$(sed -n 's/.*static let current = "\([^"]*\)".*/\1/p' "$PROJECT_DIR/Sources/CheThingsMCPCore/Version.swift" | head -1)"
+if [[ -z "$EXPECTED_VERSION" ]]; then
+    echo "Error: could not read AppVersion.current from Version.swift"
+    exit 1
+fi
+ARCHS="$(lipo -archs "$BUILT_BINARY")"
+for arch in arm64 x86_64; do
+    if [[ " $ARCHS " != *" $arch "* ]]; then
+        echo "Error: $BUILT_BINARY has no $arch slice (found: $ARCHS)"
+        exit 1
+    fi
+done
+CHECK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/che-things-mcp-build.XXXXXXXX")"
+trap 'rm -rf "$CHECK_DIR"' EXIT
+for arch in arm64 x86_64; do
+    SLICE="$CHECK_DIR/slice-$arch"
+    lipo -thin "$arch" "$BUILT_BINARY" -output "$SLICE"
+    # (a) the version literal from Version.swift is in the slice, (b) the newest CLI code is in
+    # it, (c) the Info.plist is embedded. A stale binary fails at least one of these.
+    if ! strings -a "$SLICE" | grep -qx -- "$EXPECTED_VERSION"; then
+        echo "Error: the $arch slice does not contain version $EXPECTED_VERSION; this is an old build"
+        exit 1
+    fi
+    if ! strings -a "$SLICE" | grep -q -- "--print-tcc-path"; then
+        echo "Error: the $arch slice lacks the --print-tcc-path code; this is an old build"
+        exit 1
+    fi
+    if ! otool -s __TEXT __info_plist "$SLICE" | grep -q "Contents of"; then
+        echo "Error: the $arch slice has no embedded Info.plist"
+        exit 1
+    fi
+    echo "  ✓ $arch: version $EXPECTED_VERSION, --print-tcc-path, embedded Info.plist"
+done
+
+# Step 3: Put the verified product into mcpb/server.
+echo "[3/4] Creating Universal Binary..."
+mkdir -p "$SERVER_DIR"
+UNIVERSAL_BINARY="$SERVER_DIR/CheThingsMCP"
+# Remove first: writing over a binary that a running process holds open leaves a stale
+# code-signature cache per inode, and the kernel then kills the new binary on exec.
+rm -f "$UNIVERSAL_BINARY"
+cp "$BUILT_BINARY" "$UNIVERSAL_BINARY"
+chmod +x "$UNIVERSAL_BINARY"
+echo "Created Universal Binary: $UNIVERSAL_BINARY"
 
 # Step 3.5: Sign + notarize for distribution.
-# Required for releases: on macOS 26 an ad-hoc signed binary cannot create a TCC
-# (Automation / Apple Events) grant; Developer ID signing + Hardened Runtime +
-# notarization is the path that lets end users get the permission dialog.
+# Required for releases. On macOS 26 ad-hoc signed binaries were reported (che-ical-mcp
+# issues 44 and 154) to be unable to create TCC grants for Calendar / Reminders; for
+# Automation / Apple Events, which this project uses, that is inferred and not yet observed.
+# Developer ID signing + Hardened Runtime + notarization is the distribution path either way.
 #
 # Behavior:
 #   SKIP_CODESIGN=1 (or "true") -> skip unconditionally (local iteration override)
@@ -65,7 +99,7 @@ if [[ "${SKIP_CODESIGN:-}" == "1" || "${SKIP_CODESIGN:-}" == "true" ]]; then
 elif [[ -z "${DEVELOPER_ID:-}" ]]; then
     SHOULD_SIGN=false
     SKIP_REASON="DEVELOPER_ID env not set"
-elif ! security find-identity -p codesigning -v 2>/dev/null | grep -qF "$DEVELOPER_ID"; then
+elif ! security find-identity -p codesigning -v 2>/dev/null | grep -qiF -- "$DEVELOPER_ID"; then
     SHOULD_SIGN=false
     SKIP_REASON="codesigning identity '$DEVELOPER_ID' not in keychain"
 fi
@@ -137,10 +171,24 @@ echo ""
 if command -v mcpb &> /dev/null; then
     echo "Packing MCPB bundle..."
     cd "$MCPB_DIR"
-    mcpb pack
+    # Name the output explicitly: without it `mcpb pack` names the file after the folder
+    # (mcpb/mcpb.mcpb, which .gitignore hides), and the file this script reports and the
+    # repository tracks (che-things-mcp.mcpb) would stay at whatever an earlier run left.
+    MCPB_OUTPUT="$MCPB_DIR/che-things-mcp.mcpb"
+    rm -f "$MCPB_OUTPUT" "$MCPB_DIR/mcpb.mcpb"
+    mcpb pack . "$MCPB_OUTPUT"
+    if [[ ! -s "$MCPB_OUTPUT" ]]; then
+        echo "Error: mcpb pack did not produce $MCPB_OUTPUT"
+        exit 1
+    fi
+    # The bundle must carry the binary that was just verified (and, on a release, signed).
+    if ! unzip -p "$MCPB_OUTPUT" server/CheThingsMCP | cmp -s - "$UNIVERSAL_BINARY"; then
+        echo "Error: server/CheThingsMCP inside $MCPB_OUTPUT differs from $UNIVERSAL_BINARY"
+        exit 1
+    fi
     echo ""
     echo "=== Build Complete ==="
-    echo "MCPB package: $MCPB_DIR/che-things-mcp.mcpb"
+    echo "MCPB package: $MCPB_OUTPUT"
 else
     echo "=== Build Complete (Manual Pack Required) ==="
     echo "mcpb CLI not found. To pack the bundle:"

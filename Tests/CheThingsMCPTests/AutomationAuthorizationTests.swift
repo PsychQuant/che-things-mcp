@@ -63,9 +63,31 @@ final class AutomationAuthorizationTests: XCTestCase {
 
     // MARK: - Probe (never prompts)
 
-    func testProbeAgainstAppThatIsNotRunningNeverReportsAuthorized() {
+    func testProbeAgainstAppThatIsNotRunningReportsItIsNotRunning() {
         let status = AutomationProbe.status(bundleID: "com.example.che-things-mcp.not-running", askUserIfNeeded: false)
-        XCTAssertNotEqual(status, .authorized)
+        XCTAssertEqual(status, .targetNotRunning,
+                       "procNotFound is what the SDK header documents for a target that is not running")
+    }
+
+    // MARK: - --setup plan (pure; the dialog itself cannot be tested)
+
+    func testSetupPlanWhenThingsIsNotRunning() {
+        XCTAssertEqual(AutomationSetup.plan(isRunning: false, status: .targetNotRunning), .notRunning)
+    }
+
+    func testSetupPlanWhenAlreadyAuthorized() {
+        XCTAssertEqual(AutomationSetup.plan(isRunning: true, status: .authorized), .alreadyAuthorized)
+    }
+
+    /// macOS does not show the dialog again after an explicit denial, so --setup must not
+    /// tell the user to click Allow; it must point to System Settings instead.
+    func testSetupPlanWhenAlreadyDeniedDoesNotAskAgain() {
+        XCTAssertEqual(AutomationSetup.plan(isRunning: true, status: .denied), .deniedBefore)
+    }
+
+    func testSetupPlanAsksWhenNotDeterminedOrUnknown() {
+        XCTAssertEqual(AutomationSetup.plan(isRunning: true, status: .notDetermined), .askUser)
+        XCTAssertEqual(AutomationSetup.plan(isRunning: true, status: .other(-1)), .askUser)
     }
 
     func testThingsBundleIdentifier() {

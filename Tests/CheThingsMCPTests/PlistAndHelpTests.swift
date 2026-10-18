@@ -10,9 +10,11 @@ import XCTest
 /// (observed for Calendar in che-ical-mcp issue 154; for Apple Events this is
 /// inferred from Apple's documentation, not yet observed).
 ///
-/// These tests read the same files `codesign --entitlements` and the linker's
-/// `-sectcreate __info_plist` consume, so they go RED before a broken artifact
-/// can ship.
+/// These tests read the source files that `codesign --entitlements` and the linker's
+/// `-sectcreate __info_plist` consume. They guard the sources only: `make release-signed`
+/// runs them first, `scripts/build-mcpb.sh` checks the built slices and
+/// `scripts/sign-and-notarize.sh` checks the signed binary. None of that replaces trying
+/// the permission dialog by hand.
 final class PlistAndHelpTests: XCTestCase {
 
     private static let appleEventsKey = "com.apple.security.automation.apple-events"
