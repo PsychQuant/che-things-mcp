@@ -201,6 +201,55 @@ public actor ThingsManager {
         return formatter
     }()
 
+    /// AppleScript that lists every area as `id|||name|||tag names###`.
+    /// Reads each property for all areas in one Apple Event instead of three per area; issue 5.
+    static let areasScript = """
+    tell application "Things3"
+        set areaCount to count of areas
+        if areaCount = 0 then return ""
+        set allIds to id of areas
+        set allNames to name of areas
+        set allTags to tag names of areas
+        set output to ""
+        repeat with i from 1 to areaCount
+            set output to output & (item i of allIds) & "|||" & (item i of allNames) & "|||" & (item i of allTags) & "###"
+        end repeat
+        return output
+    end tell
+    """
+
+    /// AppleScript that lists every tag as `id|||name|||parent tag name###`.
+    /// Reads each property for all tags in one Apple Event; the per-tag `parent tag` read is only a
+    /// fallback for a Things version that refuses the bulk form. Output matches the old per-item
+    /// loop byte for byte (`LiveThingsQueryTests`); issue 5.
+    static let tagsScript = """
+    tell application "Things3"
+        set tagCount to count of tags
+        if tagCount = 0 then return ""
+        set allIds to id of tags
+        set allNames to name of tags
+        set allParents to {}
+        try
+            set allParents to name of parent tag of tags
+        on error
+            repeat with t in tags
+                set parentName to ""
+                try
+                    set parentName to name of parent tag of t
+                end try
+                set end of allParents to parentName
+            end repeat
+        end try
+        set output to ""
+        repeat with i from 1 to tagCount
+            set parentName to ""
+            if item i of allParents is not missing value then set parentName to item i of allParents
+            set output to output & (item i of allIds) & "|||" & (item i of allNames) & "|||" & parentName & "###"
+        end repeat
+        return output
+    end tell
+    """
+
     // MARK: - AppleScript Execution
 
     private func executeAppleScript(_ script: String) async throws -> String {
@@ -779,18 +828,7 @@ public actor ThingsManager {
     // MARK: - Areas
 
     public func getAreas() async throws -> [Area] {
-        let script = """
-        tell application "Things3"
-            set output to ""
-            repeat with a in areas
-                set areaId to id of a
-                set areaName to name of a
-                set areaTags to tag names of a
-                set output to output & areaId & "|||" & areaName & "|||" & areaTags & "###"
-            end repeat
-            return output
-        end tell
-        """
+        let script = Self.areasScript
 
         let result = try await executeAppleScript(script)
         return parseAreasFromOutput(result)
@@ -866,21 +904,7 @@ public actor ThingsManager {
     // MARK: - Tags
 
     public func getTags() async throws -> [Tag] {
-        let script = """
-        tell application "Things3"
-            set output to ""
-            repeat with t in tags
-                set tagId to id of t
-                set tagName to name of t
-                set parentName to ""
-                try
-                    set parentName to name of parent tag of t
-                end try
-                set output to output & tagId & "|||" & tagName & "|||" & parentName & "###"
-            end repeat
-            return output
-        end tell
-        """
+        let script = Self.tagsScript
 
         let result = try await executeAppleScript(script)
         return parseTagsFromOutput(result)
