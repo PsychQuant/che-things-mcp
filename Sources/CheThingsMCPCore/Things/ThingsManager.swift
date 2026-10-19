@@ -155,7 +155,20 @@ public actor ThingsManager {
 
     private var authToken: String?
 
+    /// Runs AppleScript source and opens `things:///` URLs. Replaced in tests so that no script
+    /// or URL reaches Things.
+    private let runScript: @Sendable (String) async throws -> String
+    private let openURL: @Sendable (URL) -> Void
+
     public init() {
+        self.init(runScript: { try await AppleScriptRunner.run($0) },
+                  openURL: { url in NSWorkspace.shared.open(url) })
+    }
+
+    init(runScript: @escaping @Sendable (String) async throws -> String,
+         openURL: @escaping @Sendable (URL) -> Void) {
+        self.runScript = runScript
+        self.openURL = openURL
         // Read auth token from environment variable
         self.authToken = ProcessInfo.processInfo.environment["THINGS3_AUTH_TOKEN"]
     }
@@ -269,7 +282,7 @@ public actor ThingsManager {
     // MARK: - AppleScript Execution
 
     private func executeAppleScript(_ script: String) async throws -> String {
-        try await AppleScriptRunner.run(script)
+        try await runScript(script)
     }
 
     // MARK: - List Access (Read Operations)
@@ -692,6 +705,7 @@ public actor ThingsManager {
         tags: [String]? = nil,
         when: String? = nil
     ) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         var updates: [String] = []
 
         if let name = name {
@@ -730,6 +744,7 @@ public actor ThingsManager {
         notes: String? = nil,
         tags: [String]? = nil
     ) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         var updates: [String] = []
 
         if let name = name {
@@ -759,6 +774,7 @@ public actor ThingsManager {
     // MARK: - Complete/Delete Operations
 
     public func completeTodo(id: String, completed: Bool = true) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         let status = completed ? "completed" : "open"
         let script = """
         tell application "Things3"
@@ -769,6 +785,7 @@ public actor ThingsManager {
     }
 
     public func cancelTodo(id: String, canceled: Bool = true) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         let status = canceled ? "canceled" : "open"
         let script = """
         tell application "Things3"
@@ -779,6 +796,7 @@ public actor ThingsManager {
     }
 
     public func cancelProject(id: String, canceled: Bool = true) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         let status = canceled ? "canceled" : "open"
         let script = """
         tell application "Things3"
@@ -791,6 +809,7 @@ public actor ThingsManager {
     // MARK: - Edit Operations (Open in Things UI)
 
     public func editTodo(id: String) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         let script = """
         tell application "Things3"
             edit to do id "\(id)"
@@ -800,6 +819,7 @@ public actor ThingsManager {
     }
 
     public func editProject(id: String) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         let script = """
         tell application "Things3"
             edit project id "\(id)"
@@ -820,6 +840,7 @@ public actor ThingsManager {
     }
 
     public func deleteTodo(id: String) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         // Use 'delete' command instead of moving to localized "Trash" list
         // This works regardless of Things3 language settings
         let script = """
@@ -831,6 +852,7 @@ public actor ThingsManager {
     }
 
     public func deleteProject(id: String) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         // Use 'delete' command instead of moving to localized "Trash" list
         // This works regardless of Things3 language settings
         let script = """
@@ -883,6 +905,7 @@ public actor ThingsManager {
         name: String? = nil,
         tags: [String]? = nil
     ) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         var updates: [String] = []
 
         if let name = name {
@@ -907,6 +930,7 @@ public actor ThingsManager {
     }
 
     public func deleteArea(id: String) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         // Note: When deleting an area, the area itself is not moved to Trash,
         // but its children (projects and to-dos) will be moved to Trash
         let script = """
@@ -965,6 +989,7 @@ public actor ThingsManager {
         name: String? = nil,
         parentTagName: String? = nil
     ) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         var updates: [String] = []
 
         if let name = name {
@@ -994,6 +1019,7 @@ public actor ThingsManager {
     }
 
     public func deleteTag(id: String) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         let script = """
         tell application "Things3"
             delete tag id "\(id)"
@@ -1005,6 +1031,7 @@ public actor ThingsManager {
     // MARK: - Move Operations
 
     public func moveTodo(id: String, toList: String? = nil, toProject: String? = nil) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         var moveCommand = ""
 
         if let projectName = toProject {
@@ -1026,6 +1053,7 @@ public actor ThingsManager {
     }
 
     public func moveProject(id: String, toArea: String) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         let script = """
         tell application "Things3"
             move project id "\(id)" to area "\(escapeForAppleScript(toArea))"
@@ -1037,6 +1065,7 @@ public actor ThingsManager {
     // MARK: - UI Operations
 
     public func showTodo(id: String) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         let script = """
         tell application "Things3"
             show to do id "\(id)"
@@ -1046,6 +1075,7 @@ public actor ThingsManager {
     }
 
     public func showProject(id: String) async throws {
+        let id = try AppleScriptText.validatedID(id)  // issue 9: ids enter script source
         let script = """
         tell application "Things3"
             show project id "\(id)"
@@ -1155,7 +1185,7 @@ public actor ThingsManager {
 
     public func getTodosInProject(projectId: String? = nil, projectName: String? = nil) async throws -> [Todo] {
         var projectRef = ""
-        if let id = projectId {
+        if let id = try projectId.map(AppleScriptText.validatedID) {
             projectRef = "project id \"\(id)\""
         } else if let name = projectName {
             projectRef = "project \"\(escapeForAppleScript(name))\""
@@ -1211,7 +1241,7 @@ public actor ThingsManager {
 
     public func getTodosInArea(areaId: String? = nil, areaName: String? = nil) async throws -> [Todo] {
         var areaRef = ""
-        if let id = areaId {
+        if let id = try areaId.map(AppleScriptText.validatedID) {
             areaRef = "area id \"\(id)\""
         } else if let name = areaName {
             areaRef = "area \"\(escapeForAppleScript(name))\""
@@ -1267,7 +1297,7 @@ public actor ThingsManager {
 
     public func getProjectsInArea(areaId: String? = nil, areaName: String? = nil) async throws -> [Project] {
         var areaRef = ""
-        if let id = areaId {
+        if let id = try areaId.map(AppleScriptText.validatedID) {
             areaRef = "area id \"\(id)\""
         } else if let name = areaName {
             areaRef = "area \"\(escapeForAppleScript(name))\""
@@ -1303,6 +1333,15 @@ public actor ThingsManager {
     }
 
     // MARK: - Helper Methods
+
+    /// Characters left unencoded in a URL query value. `.urlQueryAllowed` keeps `&`, `=`, `+`,
+    /// `?` and `#`, so checklist text could add parameters to a `things:///` URL (issue 9).
+    static let urlQueryValueAllowed: CharacterSet = {
+        var set = CharacterSet.urlQueryAllowed
+        set.remove(charactersIn: "&=+?#")
+        return set
+    }()
+
 
     private func escapeForAppleScript(_ string: String) -> String {
         return string
@@ -1642,12 +1681,13 @@ public actor ThingsManager {
     /// Add checklist items to an existing to-do (appends to existing checklist)
     /// - Note: Due to Things 3 API limitations, this can only ADD items. It cannot read or mark items as complete.
     public func addChecklistItems(todoId: String, items: [String]) throws {
+        let todoId = try AppleScriptText.validatedID(todoId)  // issue 9: id enters the URL
         guard !items.isEmpty else {
             throw ThingsError.invalidParameter("items array cannot be empty")
         }
 
         let itemsString = items.joined(separator: "\n")
-        guard let encodedItems = itemsString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+        guard let encodedItems = itemsString.addingPercentEncoding(withAllowedCharacters: Self.urlQueryValueAllowed) else {
             throw ThingsError.urlSchemeError("Failed to encode checklist items")
         }
 
@@ -1662,14 +1702,15 @@ public actor ThingsManager {
             throw ThingsError.urlSchemeError("Failed to create URL")
         }
 
-        NSWorkspace.shared.open(url)
+        openURL(url)
     }
 
     /// Set (replace) all checklist items for a to-do
     /// - Warning: This will REPLACE all existing checklist items!
     public func setChecklistItems(todoId: String, items: [String]) throws {
+        let todoId = try AppleScriptText.validatedID(todoId)  // issue 9: id enters the URL
         let itemsString = items.joined(separator: "\n")
-        guard let encodedItems = itemsString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+        guard let encodedItems = itemsString.addingPercentEncoding(withAllowedCharacters: Self.urlQueryValueAllowed) else {
             throw ThingsError.urlSchemeError("Failed to encode checklist items")
         }
 
@@ -1684,6 +1725,6 @@ public actor ThingsManager {
             throw ThingsError.urlSchemeError("Failed to create URL")
         }
 
-        NSWorkspace.shared.open(url)
+        openURL(url)
     }
 }
