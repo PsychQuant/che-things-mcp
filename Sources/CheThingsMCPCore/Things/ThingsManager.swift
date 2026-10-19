@@ -201,82 +201,75 @@ public actor ThingsManager {
         return formatter
     }()
 
+    /// AppleScript that lists every area as `id|||name|||tag names###`.
+    /// Reads each property for all areas in one Apple Event instead of three per area, with the same
+    /// length check and per-area fallback as `tagsScript`; issue 5.
+    static let areasScript = """
+    tell application "Things3"
+        set allIds to id of areas
+        set areaCount to count of allIds
+        if areaCount = 0 then return ""
+        set allNames to name of areas
+        set allTags to tag names of areas
+        if (count of allNames) is not areaCount or (count of allTags) is not areaCount then
+            set allNames to {}
+            set allTags to {}
+            repeat with areaId in allIds
+                set a to area id (contents of areaId)
+                set end of allNames to name of a
+                set end of allTags to tag names of a
+            end repeat
+        end if
+        set output to ""
+        repeat with i from 1 to areaCount
+            set output to output & (item i of allIds) & "|||" & (item i of allNames) & "|||" & (item i of allTags) & "###"
+        end repeat
+        return output
+    end tell
+    """
+
+    /// AppleScript that lists every tag as `id|||name|||parent tag name###`.
+    /// Reads each property for all tags in one Apple Event. If a bulk read fails or comes back with
+    /// a different length than the id list (a Things version that refuses the bulk form, or tags
+    /// changed between events), it reads tag by tag instead. Output matches the old per-item loop
+    /// byte for byte on both paths (`LiveThingsQueryTests`, forced-fallback check); issue 5.
+    static let tagsScript = """
+    tell application "Things3"
+        set allIds to id of tags
+        set tagCount to count of allIds
+        if tagCount = 0 then return ""
+        set allNames to name of tags
+        set allParents to {}
+        try
+            set allParents to name of parent tag of tags
+        end try
+        if (count of allNames) is not tagCount or (count of allParents) is not tagCount then
+            set allNames to {}
+            set allParents to {}
+            repeat with tagId in allIds
+                set t to tag id (contents of tagId)
+                set end of allNames to name of t
+                set parentName to ""
+                try
+                    set parentName to name of parent tag of t
+                end try
+                set end of allParents to parentName
+            end repeat
+        end if
+        set output to ""
+        repeat with i from 1 to tagCount
+            set parentName to ""
+            if item i of allParents is not missing value then set parentName to item i of allParents
+            set output to output & (item i of allIds) & "|||" & (item i of allNames) & "|||" & parentName & "###"
+        end repeat
+        return output
+    end tell
+    """
+
     // MARK: - AppleScript Execution
 
-    // IMPORTANT: AppleScript execution MUST run on a background thread to avoid blocking
-    // the MCP SDK's async event loop. NSAppleScript.executeAndReturnError is synchronous
-    // and will block stdin processing if run on the main thread.
-
     private func executeAppleScript(_ script: String) async throws -> String {
-        // Run AppleScript on a background DispatchQueue to prevent blocking MCP event loop
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                var error: NSDictionary?
-                guard let appleScript = NSAppleScript(source: script) else {
-                    continuation.resume(throwing: ThingsError.scriptError("Failed to create AppleScript"))
-                    return
-                }
-
-                let result = appleScript.executeAndReturnError(&error)
-
-                if let error = error {
-                    let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
-                    if let authError = ThingsError.authorizationError(
-                        errorNumber: error[NSAppleScript.errorNumber] as? Int,
-                        message: errorMessage,
-                        binaryPath: AutomationSetup.currentBinaryPath()) {
-                        continuation.resume(throwing: authError)
-                        return
-                    }
-                    if errorMessage.contains("Application isn't running") || errorMessage.contains("Can't get application") {
-                        continuation.resume(throwing: ThingsError.thingsNotInstalled)
-                    } else {
-                        continuation.resume(throwing: ThingsError.scriptError(errorMessage))
-                    }
-                    return
-                }
-
-                continuation.resume(returning: result.stringValue ?? "")
-            }
-        }
-    }
-
-    private func executeAppleScriptReturningList(_ script: String) async throws -> [String] {
-        // Run AppleScript on a background DispatchQueue to prevent blocking MCP event loop
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                var error: NSDictionary?
-                guard let appleScript = NSAppleScript(source: script) else {
-                    continuation.resume(throwing: ThingsError.scriptError("Failed to create AppleScript"))
-                    return
-                }
-
-                let result = appleScript.executeAndReturnError(&error)
-
-                if let error = error {
-                    let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
-                    if let authError = ThingsError.authorizationError(
-                        errorNumber: error[NSAppleScript.errorNumber] as? Int,
-                        message: errorMessage,
-                        binaryPath: AutomationSetup.currentBinaryPath()) {
-                        continuation.resume(throwing: authError)
-                        return
-                    }
-                    continuation.resume(throwing: ThingsError.scriptError(errorMessage))
-                    return
-                }
-
-                // Parse list result
-                var items: [String] = []
-                let count = result.numberOfItems
-                for i in 1...count {
-                    if let item = result.atIndex(i)?.stringValue {
-                        items.append(item)
-                    }
-                }
-                continuation.resume(returning: items)
-            }
-        }
+        try await AppleScriptRunner.run(script)
     }
 
     // MARK: - List Access (Read Operations)
@@ -851,18 +844,7 @@ public actor ThingsManager {
     // MARK: - Areas
 
     public func getAreas() async throws -> [Area] {
-        let script = """
-        tell application "Things3"
-            set output to ""
-            repeat with a in areas
-                set areaId to id of a
-                set areaName to name of a
-                set areaTags to tag names of a
-                set output to output & areaId & "|||" & areaName & "|||" & areaTags & "###"
-            end repeat
-            return output
-        end tell
-        """
+        let script = Self.areasScript
 
         let result = try await executeAppleScript(script)
         return parseAreasFromOutput(result)
@@ -938,21 +920,7 @@ public actor ThingsManager {
     // MARK: - Tags
 
     public func getTags() async throws -> [Tag] {
-        let script = """
-        tell application "Things3"
-            set output to ""
-            repeat with t in tags
-                set tagId to id of t
-                set tagName to name of t
-                set parentName to ""
-                try
-                    set parentName to name of parent tag of t
-                end try
-                set output to output & tagId & "|||" & tagName & "|||" & parentName & "###"
-            end repeat
-            return output
-        end tell
-        """
+        let script = Self.tagsScript
 
         let result = try await executeAppleScript(script)
         return parseTagsFromOutput(result)

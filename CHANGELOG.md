@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`get_tags`, `get_areas` and `get_today` no longer stall for minutes** (#5). Every tool ran `NSAppleScript` on a background queue; Apple documents it as main-thread only. In the diagnosis experiment 4 of 5 runs of the same script on a background queue stalled for 120 s or more (2 returned `-1712 AppleEvent timed out`), while every main-thread run finished in 1–4 s. Scripts now run on the main thread. This is an empirical result on one machine; the mechanism is not fully established. Over MCP stdio, measured by several reviewers: `get_tags` 0.08–0.43 s (1.7.0: no answer within 150 s in 3 of 3 runs), `get_areas` 0.11–0.22 s, `get_today` (354 items) 0.9–7.3 s.
+- Not fixed here: the six tools that still read one Apple Event per item (#6) stay slow; `search_todos` takes 40–90 s.
+
+### Changed
+- **Tool calls now run one at a time.** Scripts execute on the main queue in arrival order, so a long script delays every later tool call, writes included (measured: `get_tags` waited 37.6 s behind a 40.6 s `search_todos`; 1.7.0 answered in 9 s in the same situation). `ping` and `tools/list` are not affected. This is the trade-off for removing the stalls; options are in #8.
+- `get_tags` and `get_areas` read each property for the whole collection in one Apple Event instead of one per property per item, and fall back to reading item by item if a bulk read comes back shorter than the id list. Output is unchanged (checked byte for byte against the old scripts on live data).
+- Removed the unused `executeAppleScriptReturningList`.
+
+### Tests
+- `AppleScriptRunnerTests`: an AppleScriptObjC script reports the thread it runs on; result and error mapping are pinned. No Things 3 needed.
+- `LiveThingsQueryTests`: byte-for-byte comparison of the tags and areas scripts with the old per-item scripts, and a check that the data includes a tag with a parent; runs only with `CHE_THINGS_LIVE=1` and Things 3 running.
+
+---
+
 ## [1.7.0] - 2026-10-18
 
 Refs #1, #4. Those issues stay open until the permission flow has been verified on a signed build.

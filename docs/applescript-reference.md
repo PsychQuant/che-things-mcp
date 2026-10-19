@@ -237,5 +237,5 @@ When implementing AppleScript calls in Swift:
 
 1. **Date Handling**: Use `parseDate()` to handle all localized date formats, then output in `yyyy-MM-dd` format
 2. **String Escaping**: Escape `\` and `"` for AppleScript strings
-3. **Async Execution**: Run `NSAppleScript.executeAndReturnError` on a background queue to avoid blocking
+3. **Execution thread**: Run every script through `AppleScriptRunner.run`, which executes `NSAppleScript` on the main thread. Apple lists `NSAppleScript` as main-thread only; running it on a background queue made Apple Events stall until the 120 s timeout (#5). Do not move it back to a background queue to "avoid blocking": scripts are serialized on the main queue instead, see #8.
 4. **List References**: Use `getListReference()` helper for locale-independent list access
