@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **Tool arguments can no longer change the AppleScript a tool runs** (#9). Ids were inserted into scripts without escaping, and so were tags, date strings that do not parse, and list names that are not built-in lists; a `"` in any of them ended the string literal. Every tool that takes an id now refuses one outside `[A-Za-z0-9-]` (1–64 characters, the shape of a Things id) before building a script, and the other values are escaped. The URL-scheme checklist tools validate the id and encode the item text with a set that also encodes `& = + ? #`, so checklist text cannot add URL parameters.
+
+### Fixed
+- Names, notes or tags containing `|||` or `###` no longer shift fields when results are parsed: script output is now separated with control characters (#9).
+
+### Tests
+- Tools take an injectable script runner and URL opener, so id validation and escaping are tested without Things. `ScriptCompileTests` (`CHE_THINGS_COMPILE=1`) compiles every generated script with `osacompile`, which needs no Automation permission.
+
 ## [1.7.1] - 2026-10-19
 
 ### Fixed
