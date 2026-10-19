@@ -51,8 +51,8 @@ final class LiveThingsQueryTests: XCTestCase {
         XCTAssertEqual(production, reference)
         // The bulk `name of parent tag of tags` read is the risky part; without a tag that has a
         // parent, the check above passes without exercising it.
-        let parentFields = reference.components(separatedBy: \(AppleScriptText.recordSeparatorExpression)).compactMap { row -> String? in
-            let fields = row.components(separatedBy: \(AppleScriptText.fieldSeparatorExpression))
+        let parentFields = reference.components(separatedBy: AppleScriptText.recordSeparator).compactMap { row -> String? in
+            let fields = row.components(separatedBy: AppleScriptText.fieldSeparator)
             return fields.count == 3 ? fields[2] : nil
         }
         XCTAssertTrue(parentFields.contains { !$0.isEmpty },
