@@ -214,7 +214,7 @@ public actor ThingsManager {
         return formatter
     }()
 
-    /// AppleScript that lists every area as `id|||name|||tag names###`.
+    /// AppleScript that lists every area as id, name, tag names, with the field and record separators of `AppleScriptText`.
     /// Reads each property for all areas in one Apple Event instead of three per area, with the same
     /// length check and per-area fallback as `tagsScript`; issue 5.
     static let areasScript = """
@@ -235,13 +235,13 @@ public actor ThingsManager {
         end if
         set output to ""
         repeat with i from 1 to areaCount
-            set output to output & (item i of allIds) & "|||" & (item i of allNames) & "|||" & (item i of allTags) & "###"
+            set output to output & (item i of allIds) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allNames) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allTags) & \(AppleScriptText.recordSeparatorExpression)
         end repeat
         return output
     end tell
     """
 
-    /// AppleScript that lists every tag as `id|||name|||parent tag name###`.
+    /// AppleScript that lists every tag as id, name, parent tag name, with the field and record separators of `AppleScriptText`.
     /// Reads each property for all tags in one Apple Event. If a bulk read fails or comes back with
     /// a different length than the id list (a Things version that refuses the bulk form, or tags
     /// changed between events), it reads tag by tag instead. Output matches the old per-item loop
@@ -273,7 +273,7 @@ public actor ThingsManager {
         repeat with i from 1 to tagCount
             set parentName to ""
             if item i of allParents is not missing value then set parentName to item i of allParents
-            set output to output & (item i of allIds) & "|||" & (item i of allNames) & "|||" & parentName & "###"
+            set output to output & (item i of allIds) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allNames) & \(AppleScriptText.fieldSeparatorExpression) & parentName & \(AppleScriptText.recordSeparatorExpression)
         end repeat
         return output
     end tell
@@ -391,7 +391,7 @@ public actor ThingsManager {
                     set areaStr to item i of allAreas as string
                 end if
 
-                set output to output & (item i of allIds) & "|||" & (item i of allNames) & "|||" & (item i of allNotes) & "|||" & (item i of allStatuses) & "|||" & (item i of allTags) & "|||" & dueStr & "|||" & schedStr & "|||" & compStr & "|||" & projStr & "|||" & areaStr & "###"
+                set output to output & (item i of allIds) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allNames) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allNotes) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allStatuses) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allTags) & \(AppleScriptText.fieldSeparatorExpression) & dueStr & \(AppleScriptText.fieldSeparatorExpression) & schedStr & \(AppleScriptText.fieldSeparatorExpression) & compStr & \(AppleScriptText.fieldSeparatorExpression) & projStr & \(AppleScriptText.fieldSeparatorExpression) & areaStr & \(AppleScriptText.recordSeparatorExpression)
             end repeat
 
             return output
@@ -446,7 +446,7 @@ public actor ThingsManager {
 
                 set projTodoCount to count of to dos of p
 
-                set output to output & projId & "|||" & projName & "|||" & projNotes & "|||" & projStatus & "|||" & projTags & "|||" & projArea & "|||" & projTodoCount & "###"
+                set output to output & projId & \(AppleScriptText.fieldSeparatorExpression) & projName & \(AppleScriptText.fieldSeparatorExpression) & projNotes & \(AppleScriptText.fieldSeparatorExpression) & projStatus & \(AppleScriptText.fieldSeparatorExpression) & projTags & \(AppleScriptText.fieldSeparatorExpression) & projArea & \(AppleScriptText.fieldSeparatorExpression) & projTodoCount & \(AppleScriptText.recordSeparatorExpression)
             end repeat
             return output
         end tell
@@ -534,7 +534,7 @@ public actor ThingsManager {
                     set areaStr to item i of allAreas as string
                 end if
 
-                set output to output & (item i of allIds) & "|||" & (item i of allNames) & "|||" & (item i of allNotes) & "|||" & (item i of allStatuses) & "|||" & (item i of allTags) & "|||" & dueStr & "|||" & schedStr & "|||" & compStr & "|||" & projStr & "|||" & areaStr & "###"
+                set output to output & (item i of allIds) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allNames) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allNotes) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allStatuses) & \(AppleScriptText.fieldSeparatorExpression) & (item i of allTags) & \(AppleScriptText.fieldSeparatorExpression) & dueStr & \(AppleScriptText.fieldSeparatorExpression) & schedStr & \(AppleScriptText.fieldSeparatorExpression) & compStr & \(AppleScriptText.fieldSeparatorExpression) & projStr & \(AppleScriptText.fieldSeparatorExpression) & areaStr & \(AppleScriptText.recordSeparatorExpression)
             end repeat
 
             return output
@@ -1171,7 +1171,7 @@ public actor ThingsManager {
                     set todoArea to name of area of t
                 end try
 
-                set output to output & todoId & "|||" & todoName & "|||" & todoNotes & "|||" & todoStatus & "|||" & todoTags & "|||" & todoDueDate & "|||" & todoScheduledDate & "|||" & todoCompletionDate & "|||" & todoProject & "|||" & todoArea & "###"
+                set output to output & todoId & \(AppleScriptText.fieldSeparatorExpression) & todoName & \(AppleScriptText.fieldSeparatorExpression) & todoNotes & \(AppleScriptText.fieldSeparatorExpression) & todoStatus & \(AppleScriptText.fieldSeparatorExpression) & todoTags & \(AppleScriptText.fieldSeparatorExpression) & todoDueDate & \(AppleScriptText.fieldSeparatorExpression) & todoScheduledDate & \(AppleScriptText.fieldSeparatorExpression) & todoCompletionDate & \(AppleScriptText.fieldSeparatorExpression) & todoProject & \(AppleScriptText.fieldSeparatorExpression) & todoArea & \(AppleScriptText.recordSeparatorExpression)
             end repeat
             return output
         end tell
@@ -1229,7 +1229,7 @@ public actor ThingsManager {
                     set todoArea to name of area of t
                 end try
 
-                set output to output & todoId & "|||" & todoName & "|||" & todoNotes & "|||" & todoStatus & "|||" & todoTags & "|||" & todoDueDate & "|||" & todoScheduledDate & "|||" & todoCompletionDate & "|||" & todoProject & "|||" & todoArea & "###"
+                set output to output & todoId & \(AppleScriptText.fieldSeparatorExpression) & todoName & \(AppleScriptText.fieldSeparatorExpression) & todoNotes & \(AppleScriptText.fieldSeparatorExpression) & todoStatus & \(AppleScriptText.fieldSeparatorExpression) & todoTags & \(AppleScriptText.fieldSeparatorExpression) & todoDueDate & \(AppleScriptText.fieldSeparatorExpression) & todoScheduledDate & \(AppleScriptText.fieldSeparatorExpression) & todoCompletionDate & \(AppleScriptText.fieldSeparatorExpression) & todoProject & \(AppleScriptText.fieldSeparatorExpression) & todoArea & \(AppleScriptText.recordSeparatorExpression)
             end repeat
             return output
         end tell
@@ -1285,7 +1285,7 @@ public actor ThingsManager {
                     set todoArea to name of area of t
                 end try
 
-                set output to output & todoId & "|||" & todoName & "|||" & todoNotes & "|||" & todoStatus & "|||" & todoTags & "|||" & todoDueDate & "|||" & todoScheduledDate & "|||" & todoCompletionDate & "|||" & todoProject & "|||" & todoArea & "###"
+                set output to output & todoId & \(AppleScriptText.fieldSeparatorExpression) & todoName & \(AppleScriptText.fieldSeparatorExpression) & todoNotes & \(AppleScriptText.fieldSeparatorExpression) & todoStatus & \(AppleScriptText.fieldSeparatorExpression) & todoTags & \(AppleScriptText.fieldSeparatorExpression) & todoDueDate & \(AppleScriptText.fieldSeparatorExpression) & todoScheduledDate & \(AppleScriptText.fieldSeparatorExpression) & todoCompletionDate & \(AppleScriptText.fieldSeparatorExpression) & todoProject & \(AppleScriptText.fieldSeparatorExpression) & todoArea & \(AppleScriptText.recordSeparatorExpression)
             end repeat
             return output
         end tell
@@ -1322,7 +1322,7 @@ public actor ThingsManager {
 
                 set projTodoCount to count of to dos of p
 
-                set output to output & projId & "|||" & projName & "|||" & projNotes & "|||" & projStatus & "|||" & projTags & "|||" & projArea & "|||" & projTodoCount & "###"
+                set output to output & projId & \(AppleScriptText.fieldSeparatorExpression) & projName & \(AppleScriptText.fieldSeparatorExpression) & projNotes & \(AppleScriptText.fieldSeparatorExpression) & projStatus & \(AppleScriptText.fieldSeparatorExpression) & projTags & \(AppleScriptText.fieldSeparatorExpression) & projArea & \(AppleScriptText.fieldSeparatorExpression) & projTodoCount & \(AppleScriptText.recordSeparatorExpression)
             end repeat
             return output
         end tell
@@ -1443,9 +1443,9 @@ public actor ThingsManager {
     private func parseTodosFromOutput(_ output: String) -> [Todo] {
         guard !output.isEmpty else { return [] }
 
-        let todoStrings = output.components(separatedBy: "###").filter { !$0.isEmpty }
+        let todoStrings = output.components(separatedBy: AppleScriptText.recordSeparator).filter { !$0.isEmpty }
         return todoStrings.compactMap { todoString -> Todo? in
-            let parts = todoString.components(separatedBy: "|||")
+            let parts = todoString.components(separatedBy: AppleScriptText.fieldSeparator)
             guard parts.count >= 10 else { return nil }
 
             return Todo(
@@ -1466,9 +1466,9 @@ public actor ThingsManager {
     private func parseProjectsFromOutput(_ output: String) -> [Project] {
         guard !output.isEmpty else { return [] }
 
-        let projectStrings = output.components(separatedBy: "###").filter { !$0.isEmpty }
+        let projectStrings = output.components(separatedBy: AppleScriptText.recordSeparator).filter { !$0.isEmpty }
         return projectStrings.compactMap { projectString -> Project? in
-            let parts = projectString.components(separatedBy: "|||")
+            let parts = projectString.components(separatedBy: AppleScriptText.fieldSeparator)
             guard parts.count >= 7 else { return nil }
 
             return Project(
@@ -1486,9 +1486,9 @@ public actor ThingsManager {
     private func parseAreasFromOutput(_ output: String) -> [Area] {
         guard !output.isEmpty else { return [] }
 
-        let areaStrings = output.components(separatedBy: "###").filter { !$0.isEmpty }
+        let areaStrings = output.components(separatedBy: AppleScriptText.recordSeparator).filter { !$0.isEmpty }
         return areaStrings.compactMap { areaString -> Area? in
-            let parts = areaString.components(separatedBy: "|||")
+            let parts = areaString.components(separatedBy: AppleScriptText.fieldSeparator)
             guard parts.count >= 3 else { return nil }
 
             return Area(
@@ -1502,9 +1502,9 @@ public actor ThingsManager {
     private func parseTagsFromOutput(_ output: String) -> [Tag] {
         guard !output.isEmpty else { return [] }
 
-        let tagStrings = output.components(separatedBy: "###").filter { !$0.isEmpty }
+        let tagStrings = output.components(separatedBy: AppleScriptText.recordSeparator).filter { !$0.isEmpty }
         return tagStrings.compactMap { tagString -> Tag? in
-            let parts = tagString.components(separatedBy: "|||")
+            let parts = tagString.components(separatedBy: AppleScriptText.fieldSeparator)
             guard parts.count >= 2 else { return nil }
 
             return Tag(

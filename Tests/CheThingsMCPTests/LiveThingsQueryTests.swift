@@ -26,7 +26,7 @@ final class LiveThingsQueryTests: XCTestCase {
             try
                 set parentName to name of parent tag of t
             end try
-            set output to output & tagId & "|||" & tagName & "|||" & parentName & "###"
+            set output to output & tagId & \(AppleScriptText.fieldSeparatorExpression) & tagName & \(AppleScriptText.fieldSeparatorExpression) & parentName & \(AppleScriptText.recordSeparatorExpression)
         end repeat
         return output
     end tell
@@ -39,7 +39,7 @@ final class LiveThingsQueryTests: XCTestCase {
             set areaId to id of a
             set areaName to name of a
             set areaTags to tag names of a
-            set output to output & areaId & "|||" & areaName & "|||" & areaTags & "###"
+            set output to output & areaId & \(AppleScriptText.fieldSeparatorExpression) & areaName & \(AppleScriptText.fieldSeparatorExpression) & areaTags & \(AppleScriptText.recordSeparatorExpression)
         end repeat
         return output
     end tell
@@ -51,8 +51,8 @@ final class LiveThingsQueryTests: XCTestCase {
         XCTAssertEqual(production, reference)
         // The bulk `name of parent tag of tags` read is the risky part; without a tag that has a
         // parent, the check above passes without exercising it.
-        let parentFields = reference.components(separatedBy: "###").compactMap { row -> String? in
-            let fields = row.components(separatedBy: "|||")
+        let parentFields = reference.components(separatedBy: \(AppleScriptText.recordSeparatorExpression)).compactMap { row -> String? in
+            let fields = row.components(separatedBy: \(AppleScriptText.fieldSeparatorExpression))
             return fields.count == 3 ? fields[2] : nil
         }
         XCTAssertTrue(parentFields.contains { !$0.isEmpty },
