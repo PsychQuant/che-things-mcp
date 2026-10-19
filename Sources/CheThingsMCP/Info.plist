@@ -7,7 +7,7 @@
 	<key>CFBundleName</key>
 	<string>CheThingsMCP</string>
 	<key>CFBundleVersion</key>
-	<string>1.7.0</string>
+	<string>1.7.1</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>CheThingsMCP needs access to Things 3 to read and manage your tasks, projects, areas and tags on behalf of your MCP client.</string>
 </dict>

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.7.1] - 2026-10-19
 
 ### Fixed
 - **`get_tags`, `get_areas` and `get_today` no longer stall for minutes** (#5). Every tool ran `NSAppleScript` on a background queue; Apple documents it as main-thread only. In the diagnosis experiment 4 of 5 runs of the same script on a background queue stalled for 120 s or more (2 returned `-1712 AppleEvent timed out`), while every main-thread run finished in 1–4 s. Scripts now run on the main thread. This is an empirical result on one machine; the mechanism is not fully established. Over MCP stdio, measured by several reviewers: `get_tags` 0.08–0.43 s (1.7.0: no answer within 150 s in 3 of 3 runs), `get_areas` 0.11–0.22 s, `get_today` (354 items) 0.9–7.3 s.

@@ -360,6 +360,7 @@ This extension:
 
 | Version | Changes |
 |---------|---------|
+| v1.7.1 | **No more multi-minute stalls** (#5). AppleScript runs on the main thread (it stalled for 120 s or more on a background queue); `get_tags` and `get_areas` read in bulk. Tool calls now run one at a time, so a slow tool delays the others (#8). |
 | v1.7.0 | **Automation permission.** A refused Apple Events call now returns an actionable error naming Things 3, the binary path and the fix, instead of the raw AppleScript message. New `--setup` and `--print-tcc-path`. Release binary is Developer ID signed and notarized, with an embedded Info.plist and the Apple Events entitlement. `--help` now names the Automation permission (it said Accessibility). |
 | v1.6.2 | **Bug fix.** Fixed `add_project` failing with AppleScript error when `area` parameter is provided. Uses create-then-move pattern. |
 | v1.6.1 | **Version management.** Centralized `Version.swift`, CLI `--version`/`--help` support. |
