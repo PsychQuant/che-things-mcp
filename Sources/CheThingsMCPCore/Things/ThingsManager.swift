@@ -205,7 +205,7 @@ public actor ThingsManager {
         if let listId = getListIdForBuiltIn(listName) {
             return "list id \"\(listId)\""
         }
-        return "list \"\(listName)\""
+        return "list \(AppleScriptText.literal(listName))"
     }
 
     private let dateFormatter: ISO8601DateFormatter = {
@@ -582,7 +582,7 @@ public actor ThingsManager {
         }
 
         if let tags = tags, !tags.isEmpty {
-            properties += ", tag names:\"\(tags.joined(separator: ", "))\""
+            properties += ", tag names:\(AppleScriptText.literal(tags.joined(separator: ", ")))"
         }
 
         // Determine where to create the todo
@@ -661,7 +661,7 @@ public actor ThingsManager {
         }
 
         if let tags = tags, !tags.isEmpty {
-            properties += ", tag names:\"\(tags.joined(separator: ", "))\""
+            properties += ", tag names:\(AppleScriptText.literal(tags.joined(separator: ", ")))"
         }
 
         // Things 3's `make` command does NOT support `in area "..."` for projects.
@@ -715,7 +715,7 @@ public actor ThingsManager {
             updates.append("set notes of targetTodo to \"\(escapeForAppleScript(notes))\"")
         }
         if let tags = tags {
-            updates.append("set tag names of targetTodo to \"\(tags.joined(separator: ", "))\"")
+            updates.append("set tag names of targetTodo to \(AppleScriptText.literal(tags.joined(separator: ", ")))")
         }
         if let dueDate = dueDate {
             updates.append("set due date of targetTodo to \(formatDateForAppleScript(dueDate))")
@@ -754,7 +754,7 @@ public actor ThingsManager {
             updates.append("set notes of targetProject to \"\(escapeForAppleScript(notes))\"")
         }
         if let tags = tags {
-            updates.append("set tag names of targetProject to \"\(tags.joined(separator: ", "))\"")
+            updates.append("set tag names of targetProject to \(AppleScriptText.literal(tags.joined(separator: ", ")))")
         }
 
         guard !updates.isEmpty else {
@@ -881,7 +881,7 @@ public actor ThingsManager {
         var properties = "name:\"\(escapeForAppleScript(name))\""
 
         if let tags = tags, !tags.isEmpty {
-            properties += ", tag names:\"\(tags.joined(separator: ", "))\""
+            properties += ", tag names:\(AppleScriptText.literal(tags.joined(separator: ", ")))"
         }
 
         let script = """
@@ -912,7 +912,7 @@ public actor ThingsManager {
             updates.append("set name of targetArea to \"\(escapeForAppleScript(name))\"")
         }
         if let tags = tags {
-            updates.append("set tag names of targetArea to \"\(tags.joined(separator: ", "))\"")
+            updates.append("set tag names of targetArea to \(AppleScriptText.literal(tags.joined(separator: ", ")))")
         }
 
         guard !updates.isEmpty else {
@@ -1344,9 +1344,7 @@ public actor ThingsManager {
 
 
     private func escapeForAppleScript(_ string: String) -> String {
-        return string
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
+        AppleScriptText.escape(string)
     }
 
     /// Returns an AppleScript statement to schedule an item
@@ -1381,7 +1379,7 @@ public actor ThingsManager {
                 return "schedule \(varName) for date \"\(formatter.string(from: date))\""
             }
             // Fallback: try original string as date
-            return "schedule \(varName) for date \"\(when)\""
+            return "schedule \(varName) for date \(AppleScriptText.literal(when))"
         }
     }
 
@@ -1395,7 +1393,7 @@ public actor ThingsManager {
             return "date \"\(formatter.string(from: date))\""
         }
         // Fallback: use original string (may fail for non-English locales)
-        return "date \"\(dateString)\""
+        return "date \(AppleScriptText.literal(dateString))"
     }
 
     /// Parse date string using NSDataDetector (locale-independent, supports all system languages)
